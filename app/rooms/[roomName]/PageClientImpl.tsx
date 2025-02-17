@@ -229,7 +229,8 @@ function VideoConferenceComponent(props: {
             justifyContent: 'center',
           }}
         >
-          <CustomAudioTrack />
+          <AudioConference />
+          {/* <CustomAudioTrack /> */}
           {/* <SimpleVoiceAssistant onStateChange={setAgentState} onTranscription={setTranscript} /> */}
           <Transcriptions />
         </div>
