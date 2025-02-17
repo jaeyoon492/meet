@@ -229,8 +229,8 @@ function VideoConferenceComponent(props: {
             justifyContent: 'center',
           }}
         >
-          <AudioConference />
-          {/* <CustomAudioTrack /> */}
+          {/* <AudioConference /> */}
+          <CustomAudioTrack />
           {/* <SimpleVoiceAssistant onStateChange={setAgentState} onTranscription={setTranscript} /> */}
           <Transcriptions />
         </div>
@@ -246,9 +246,11 @@ function CustomAudioTrack() {
     showChat: false,
     unreadMessages: 0,
   });
-  const audioTracks = useTracks([Track.Source.Microphone]).filter(
-    (track) => track.participant.isLocal,
-  );
+  // const audioTracks = useTracks([Track.Source.Microphone]).filter(
+  //   (track) => track.participant.isLocal,
+  // );
+
+  const audioTracks = useTracks([Track.Source.Microphone]);
 
   return (
     <LayoutContextProvider onWidgetChange={setWidgetState}>
@@ -258,13 +260,15 @@ function CustomAudioTrack() {
           style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'row' }}
         >
           {audioTracks.map((item) => (
-            <ParticipantAudioTile trackRef={item} style={{ height: '100%', width: '100%' }} />
+            <>
+              <ParticipantAudioTile trackRef={item} style={{ height: '100%', width: '100%' }} />
+            </>
           ))}
+          <ControlBar
+            variation="minimal"
+            controls={{ microphone: true, screenShare: false, camera: false, chat: true }}
+          />
         </div>
-        <ControlBar
-          variation="minimal"
-          controls={{ microphone: true, screenShare: false, camera: false, chat: true }}
-        />
       </div>
     </LayoutContextProvider>
   );
