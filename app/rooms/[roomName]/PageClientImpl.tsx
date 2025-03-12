@@ -246,11 +246,11 @@ function CustomAudioTrack() {
     showChat: false,
     unreadMessages: 0,
   });
-  const audioTracks = useTracks([Track.Source.Microphone]).filter(
-    (track) => !track.participant.isAgent,
-  );
+  // const audioTracks = useTracks([Track.Source.Microphone]).filter(
+  //   (track) => !track.participant.isAgent,
+  // );
 
-  // const audioTracks = useTracks([Track.Source.Microphone]);
+  const audioTracks = useTracks([Track.Source.Microphone]);
   console.log(audioTracks);
 
   return (
