@@ -47,6 +47,7 @@ import {
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import type { ReceivedTranscriptionSegment, WidgetState } from '@livekit/components-core';
+import { LanguageSelector } from '@/lib/LanguageSelector';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -221,6 +222,8 @@ function VideoConferenceComponent(props: {
         onEncryptionError={handleEncryptionError}
         onError={handleError}
       >
+        <LanguageSelector />
+
         <div
           style={{
             height: '100%',
