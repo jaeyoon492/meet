@@ -460,8 +460,7 @@ export default function Transcriptions() {
           .sort((a, b) => b.firstReceivedTime - a.firstReceivedTime)
           .map((segment) => (
             <li key={segment.id} style={{ listStyle: 'none' }}>
-              [{segment.firstReceivedTime}]: [{segment.language}]: {segment.participantName}:
-              {segment.text}
+              {segment.participantName}: {segment.text}
             </li>
           ))}
       </ul>
