@@ -1,37 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { useMaybeRoomContext } from '@livekit/components-react';
+import { useMaybeRoomContext, useParticipantInfo } from '@livekit/components-react';
+import { LANGUAGE_OPTIONS } from './constants';
 
-const LANGUAGE_OPTIONS = [
-  { code: 'en', label: 'English' },
-  { code: 'ko', label: 'Korean' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'zh', label: 'Chinese' },
-  { code: 'es', label: 'Spanish' },
-];
-
-export function LanguageSelector() {
+export function LanguageSelector(prop: { language: string }) {
   const room = useMaybeRoomContext();
-  const [selectedLang, setSelectedLang] = useState('jp');
+  const [selectedLang, setSelectedLang] = useState(prop.language);
 
-  useEffect(() => {
+  function truncateFromFourth(str: string): string {
+    if (str.length <= 3) return str;
+    return str.slice(0, 3) + '...';
+  }
+
+  // useEffect(() => {
+  //   if (room?.localParticipant && selectedLang) {
+  //     console.log('Setting language metadata:', selectedLang);
+
+  //     room.localParticipant
+  //       .setMetadata(JSON.stringify({ preferred_language: selectedLang }))
+  //       .catch((e) => console.error('Metadata update failed:', e));
+  //   }
+  // }, [selectedLang, room]);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (room?.localParticipant && selectedLang) {
-      console.log('Setting language metadata:', selectedLang);
-      room.localParticipant
-        .setMetadata(JSON.stringify({ preferred_language: selectedLang }))
-        .catch((e) => console.error('Metadata update failed:', e));
+      setSelectedLang(e.target.value);
+      await room.localParticipant.setMetadata(
+        JSON.stringify({
+          preferred_language: e.target.value,
+        }),
+      );
     }
-  }, [selectedLang, room]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedLang(e.target.value);
   };
 
   return (
-    <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 999 }}>
-      <label htmlFor="language-select" style={{ color: 'white', marginRight: 8 }}>
-        Language:
-      </label>
-      <select id="language-select" value={selectedLang} onChange={handleChange}>
+    <div>
+      <select
+        id="language-select"
+        value={selectedLang}
+        onChange={handleChange}
+        style={{
+          width: '45px',
+          padding: '0.5rem 0.2rem',
+          borderRadius: '0.5rem',
+          border: '1px solid #ffffff88',
+          backgroundColor: '#000000',
+          fontSize: '0.8rem',
+          transition: 'border 0.2s ease',
+        }}
+      >
         {LANGUAGE_OPTIONS.map((lang) => (
           <option key={lang.code} value={lang.code}>
             {lang.label}

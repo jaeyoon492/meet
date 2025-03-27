@@ -1,40 +1,114 @@
-.main {
-  position: relative;
-  display: grid;
-  gap: 1rem;
-  justify-content: center;
-  place-content: center;
-  justify-items: center;
-  overflow: auto;
-  flex-grow: 1;
-}
+/* styles/Home.module.css */
 
-.tabContainer {
-  width: 100%;
-  max-width: 500px;
-  padding-inline: 2rem;
-}
-
-.tabSelect {
+.pageWrapper {
   display: flex;
-  justify-content: stretch;
-  gap: 0.125rem;
-  padding: 0.125rem;
-  margin: 0 auto 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 0.5rem;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #000000;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
 }
 
-.tabSelect > * {
-  width: 100%;
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 4rem 2rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: #ffffff;
+}
+
+.header p {
+  font-size: 1.2rem;
+  color: #dddddd;
+  margin-top: 0.5rem;
 }
 
 .tabContent {
-  display: flex;
-  justify-content: center;
-  flex-direction: column;
-  gap: 0.75rem;
+  background-color: #121212;
   padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+  max-width: 500px;
+  width: 100%;
+  border: 1px solid #2e2e2e;
+}
+
+.tabContent h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #ffffff;
+}
+
+.tabContent p {
+  margin-bottom: 1.5rem;
+  color: #cccccc;
+}
+
+.optionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.optionGroup label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #eeeeee;
+}
+
+.optionField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.optionField input {
+  padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
+  border: 1px solid #555555;
+  background-color: #0a0a0a;
+  color: white;
+}
+
+.lk-button {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #ffffff88;
+  border-radius: 0.75rem;
+  background-color: #000000;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lk-button:hover {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.footer {
+  padding: 1.5rem;
+  text-align: center;
+  background-color: #000000;
+  color: #bbbbbb;
+  font-size: 0.875rem;
+  border-top: 1px solid #222222;
 }

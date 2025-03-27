@@ -1,34 +1,21 @@
 'use client';
 
 import { decodePassphrase } from '@/lib/client-utils';
-import { DebugMode } from '@/lib/Debug';
 import { RecordingIndicator } from '@/lib/RecordingIndicator';
-import { SettingsMenu } from '@/lib/SettingsMenu';
 import { ConnectionDetails } from '@/lib/types';
 import {
-  AudioVisualizer,
   BarVisualizer,
-  formatChatMessageLinks,
   LiveKitRoom,
   LocalUserChoices,
   PreJoin,
   RoomAudioRenderer,
   useVoiceAssistant,
-  VideoConference,
-  useTrackTranscription,
   AgentState,
   ControlBar,
-  AudioConference,
   useTracks,
   LayoutContextProvider,
-  TrackLoop,
-  ParticipantAudioTile,
-  Chat,
-  useEnsureTrackRef,
-  TrackRefContext,
-  AudioTrack,
   useMaybeRoomContext,
-  ParticipantName,
+  GridLayout,
 } from '@livekit/components-react';
 import {
   ExternalE2EEKeyProvider,
@@ -47,6 +34,9 @@ import {
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import type { ReceivedTranscriptionSegment, WidgetState } from '@livekit/components-core';
+import { LANGUAGE_OPTIONS } from '@/lib/constants';
+import styles from '../../../styles/PageClient.module.css';
+import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
 import { LanguageSelector } from '@/lib/LanguageSelector';
 
 const CONN_DETAILS_ENDPOINT =
@@ -72,29 +62,68 @@ export function PageClientImpl(props: {
   const [connectionDetails, setConnectionDetails] = React.useState<ConnectionDetails | undefined>(
     undefined,
   );
+  const [language, setLanguage] = useState('en'); // 기본 언어
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setLanguage(e.target.value);
+  };
 
-  const handlePreJoinSubmit = React.useCallback(async (values: LocalUserChoices) => {
-    setPreJoinChoices(values);
-    const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
-    url.searchParams.append('roomName', props.roomName);
-    url.searchParams.append('participantName', values.username);
-    if (props.region) {
-      url.searchParams.append('region', props.region);
-    }
-    const connectionDetailsResp = await fetch(url.toString());
-    const connectionDetailsData = await connectionDetailsResp.json();
-    setConnectionDetails(connectionDetailsData);
-  }, []);
+  const handlePreJoinSubmit = React.useCallback(
+    async (values: LocalUserChoices) => {
+      setPreJoinChoices(values);
+
+      const metadata = JSON.stringify({
+        preferred_language: language, // 👈 여기서 선택된 언어를 포함
+      });
+
+      const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
+      url.searchParams.append('roomName', props.roomName);
+      url.searchParams.append('participantName', values.username);
+      url.searchParams.append('metadata', metadata); // 👈 추가된 부분
+
+      if (props.region) {
+        url.searchParams.append('region', props.region);
+      }
+
+      const connectionDetailsResp = await fetch(url.toString());
+      const connectionDetailsData = await connectionDetailsResp.json();
+      setConnectionDetails(connectionDetailsData);
+    },
+    [language, props.roomName, props.region],
+  );
   const handlePreJoinError = React.useCallback((e: any) => console.error(e), []);
 
   return (
-    <main data-lk-theme="default" style={{ height: '100%' }}>
+    <main data-lk-theme="default" className={styles.container}>
       {connectionDetails === undefined || preJoinChoices === undefined ? (
-        <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
+        <div className={styles.preJoinContainer}>
+          <div className={styles.languageSelector}>
+            <label htmlFor="language-select" className={styles.languageLabel}>
+              Preferred Language:
+            </label>
+            <select
+              id="language-select"
+              value={language}
+              onChange={handleChange}
+              className={styles.languageSelect}
+            >
+              {LANGUAGE_OPTIONS.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <PreJoin
             defaults={preJoinDefaults}
             onSubmit={handlePreJoinSubmit}
             onError={handlePreJoinError}
+            style={{
+              borderRadius: '12px',
+              background: 'linear-gradient(to bottom right, #181717, #1a1a1a)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.7)',
+              display: 'grid',
+              alignItems: 'center',
+            }}
           />
         </div>
       ) : (
@@ -102,6 +131,7 @@ export function PageClientImpl(props: {
           connectionDetails={connectionDetails}
           userChoices={preJoinChoices}
           options={{ codec: props.codec, hq: props.hq }}
+          language={language}
         />
       )}
     </main>
@@ -115,6 +145,7 @@ function VideoConferenceComponent(props: {
     hq: boolean;
     codec: VideoCodec;
   };
+  language: string;
 }) {
   const e2eePassphrase =
     typeof window !== 'undefined' && decodePassphrase(location.hash.substring(1));
@@ -207,6 +238,7 @@ function VideoConferenceComponent(props: {
   // 새로 추가한 state: 전사된 텍스트를 저장
   const [transcript, setTranscript] = useState<ReceivedTranscriptionSegment[]>([]);
   // const audioTracks = useTracks([Track.Source.Microphone]);
+  const [showTranscriptions, setShowTranscriptions] = useState(false);
 
   return (
     <>
@@ -222,20 +254,20 @@ function VideoConferenceComponent(props: {
         onEncryptionError={handleEncryptionError}
         onError={handleError}
       >
-        <LanguageSelector />
-
         <div
           style={{
             height: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            gap: '8px',
           }}
         >
-          {/* <AudioConference /> */}
-          <CustomAudioTrack />
-          {/* <SimpleVoiceAssistant onStateChange={setAgentState} onTranscription={setTranscript} /> */}
-          <Transcriptions />
+          <CustomVideoTrack
+            showTranscriptions={showTranscriptions}
+            setShowTranscriptions={setShowTranscriptions}
+            language={props.language}
+          />
         </div>
         <RecordingIndicator />
         <RoomAudioRenderer />
@@ -244,7 +276,15 @@ function VideoConferenceComponent(props: {
   );
 }
 
-function CustomAudioTrack() {
+function CustomVideoTrack({
+  showTranscriptions,
+  setShowTranscriptions,
+  language,
+}: {
+  showTranscriptions: boolean;
+  setShowTranscriptions: (val: boolean) => void;
+  language: string;
+}) {
   const [widgetState, setWidgetState] = React.useState<WidgetState>({
     showChat: false,
     unreadMessages: 0,
@@ -253,25 +293,83 @@ function CustomAudioTrack() {
   //   (track) => !track.participant.isAgent,
   // );
 
-  const audioTracks = useTracks([Track.Source.Microphone]);
-  console.log(audioTracks);
+  const carouselTracks = useTracks([
+    Track.Source.Microphone,
+    Track.Source.ScreenShare,
+    Track.Source.Camera,
+  ]);
+  console.log(carouselTracks);
 
   return (
     <LayoutContextProvider onWidgetChange={setWidgetState}>
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          border: '#ffffff33 1px solid',
+          borderRadius: '8px',
+          position: 'relative',
+        }}
+      >
         <div
-          className="lk-audio-conference-stage"
-          style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'row' }}
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            // borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+            // borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
         >
-          {audioTracks.map((item) => (
-            <>
-              <ParticipantAudioTile trackRef={item} style={{ height: '100%', width: '100%' }} />
-            </>
-          ))}
           <ControlBar
             variation="minimal"
-            controls={{ microphone: true, screenShare: false, camera: false, chat: true }}
+            style={{ borderTop: 'none' }}
+            controls={{ microphone: true, screenShare: false, camera: true }}
           />
+          <div style={{ display: 'flex', gap: 4 }}>
+            <LanguageSelector language={language} />
+            <button
+              className="lk-button"
+              onClick={() => setShowTranscriptions(!showTranscriptions)}
+              style={{
+                padding: '0.5rem 0.5rem',
+                fontSize: '0.95rem',
+                borderRadius: '0.5rem',
+              }}
+            >
+              📝
+            </button>
+          </div>
+        </div>
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <GridLayout tracks={carouselTracks}>
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <CustomParticipantTile
+                barCount={5}
+                style={{
+                  border: '#ffffff33 1px solid',
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  top: 0,
+                  left: 0,
+                  zIndex: showTranscriptions ? 1 : 0,
+                }}
+              />
+            </div>
+          </GridLayout>
+          {showTranscriptions && <Transcriptions />}
         </div>
       </div>
     </LayoutContextProvider>
@@ -321,6 +419,12 @@ export default function Transcriptions() {
     [id: string]: ExtendedTranscriptionSegment;
   }>({});
 
+  const [test, setTest] = useState([
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1,
+  ]);
+
   useEffect(() => {
     if (!room) {
       return;
@@ -350,14 +454,17 @@ export default function Transcriptions() {
   }, [room]);
 
   return (
-    <ul style={{ width: '500px', height: '100%', border: 'white solid 1px' }}>
-      {Object.values(transcriptions)
-        .sort((a, b) => a.firstReceivedTime - b.firstReceivedTime)
-        .map((segment) => (
-          <li key={segment.id}>
-            {segment.participantName}: {segment.text}
-          </li>
-        ))}
-    </ul>
+    <div className={styles.transcriptionBox}>
+      <ul>
+        {Object.values(transcriptions)
+          .sort((a, b) => b.firstReceivedTime - a.firstReceivedTime)
+          .map((segment) => (
+            <li key={segment.id} style={{ listStyle: 'none' }}>
+              [{segment.firstReceivedTime}]: [{segment.language}]: {segment.participantName}:
+              {segment.text}
+            </li>
+          ))}
+      </ul>
+    </div>
   );
 }
