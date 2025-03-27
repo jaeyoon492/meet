@@ -293,11 +293,7 @@ function CustomVideoTrack({
   //   (track) => !track.participant.isAgent,
   // );
 
-  const carouselTracks = useTracks([
-    Track.Source.Microphone,
-    Track.Source.ScreenShare,
-    Track.Source.Camera,
-  ]);
+  const carouselTracks = useTracks([Track.Source.Microphone, Track.Source.Camera]);
   console.log(carouselTracks);
 
   return (
@@ -418,12 +414,6 @@ export default function Transcriptions() {
   const [transcriptions, setTranscriptions] = useState<{
     [id: string]: ExtendedTranscriptionSegment;
   }>({});
-
-  const [test, setTest] = useState([
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1,
-  ]);
 
   useEffect(() => {
     if (!room) {
