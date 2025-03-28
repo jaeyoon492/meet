@@ -38,6 +38,7 @@ import { LANGUAGE_OPTIONS } from '@/lib/constants';
 import styles from '../../../styles/PageClient.module.css';
 import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
 import { LanguageSelector } from '@/lib/LanguageSelector';
+import { TranslationBubbles } from '@/lib/TranslationBubbles';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -235,9 +236,6 @@ function VideoConferenceComponent(props: {
   }, []);
 
   const [agentState, setAgentState] = useState<AgentState>('disconnected');
-  // 새로 추가한 state: 전사된 텍스트를 저장
-  const [transcript, setTranscript] = useState<ReceivedTranscriptionSegment[]>([]);
-  // const audioTracks = useTracks([Track.Source.Microphone]);
   const [showTranscriptions, setShowTranscriptions] = useState(false);
 
   return (
@@ -263,10 +261,11 @@ function VideoConferenceComponent(props: {
             gap: '8px',
           }}
         >
-          <CustomVideoTrack
+          <CustomTrack
             showTranscriptions={showTranscriptions}
             setShowTranscriptions={setShowTranscriptions}
             language={props.language}
+            selfName={room.localParticipant?.name ?? ''}
           />
         </div>
         <RecordingIndicator />
@@ -276,25 +275,23 @@ function VideoConferenceComponent(props: {
   );
 }
 
-function CustomVideoTrack({
+function CustomTrack({
   showTranscriptions,
   setShowTranscriptions,
   language,
+  selfName,
 }: {
   showTranscriptions: boolean;
   setShowTranscriptions: (val: boolean) => void;
   language: string;
+  selfName: string;
 }) {
   const [widgetState, setWidgetState] = React.useState<WidgetState>({
     showChat: false,
     unreadMessages: 0,
   });
-  // const audioTracks = useTracks([Track.Source.Microphone]).filter(
-  //   (track) => !track.participant.isAgent,
-  // );
 
-  const carouselTracks = useTracks([Track.Source.Microphone, Track.Source.Camera]);
-  console.log(carouselTracks);
+  const tracks = useTracks([Track.Source.Microphone, Track.Source.Camera]);
 
   return (
     <LayoutContextProvider onWidgetChange={setWidgetState}>
@@ -349,7 +346,7 @@ function CustomVideoTrack({
             justifyContent: 'center',
           }}
         >
-          <GridLayout tracks={carouselTracks}>
+          <GridLayout tracks={tracks}>
             <div style={{ position: 'relative', width: '100%', height: '100%' }}>
               <CustomParticipantTile
                 barCount={5}
@@ -365,95 +362,9 @@ function CustomVideoTrack({
               />
             </div>
           </GridLayout>
-          {showTranscriptions && <Transcriptions />}
+          {showTranscriptions && <TranslationBubbles selfName={selfName} />}
         </div>
       </div>
     </LayoutContextProvider>
-  );
-}
-
-function SimpleVoiceAssistant(props: {
-  onStateChange: (state: AgentState) => void;
-  // 전사 텍스트 업데이트를 위한 콜백 함수 (옵셔널)
-  onTranscription?: (text: ReceivedTranscriptionSegment[]) => void;
-}) {
-  // useVoiceAssistant 훅이 전사 결과를 transcript 프로퍼티로 제공한다고 가정
-  const { state, audioTrack, agentTranscriptions, agent } = useVoiceAssistant();
-
-  useEffect(() => {
-    props.onStateChange(state);
-  }, [props, state]);
-
-  // 전사 텍스트가 업데이트될 때마다 부모에 전달
-  useEffect(() => {
-    if (props.onTranscription && agentTranscriptions) {
-      props.onTranscription(agentTranscriptions);
-    }
-  }, [agentTranscriptions, props]);
-
-  return (
-    <div className="h-[300px] max-w-[90vw] mx-auto">
-      <BarVisualizer
-        state={state}
-        barCount={2}
-        trackRef={audioTrack}
-        className="agent-visualizer"
-        options={{}}
-      />
-    </div>
-  );
-}
-
-// Extended interface: participantName을 추가합니다.
-interface ExtendedTranscriptionSegment extends TranscriptionSegment {
-  participantName?: string;
-}
-
-export default function Transcriptions() {
-  const room = useMaybeRoomContext();
-  const [transcriptions, setTranscriptions] = useState<{
-    [id: string]: ExtendedTranscriptionSegment;
-  }>({});
-
-  useEffect(() => {
-    if (!room) {
-      return;
-    }
-
-    const updateTranscriptions = (
-      segments: TranscriptionSegment[],
-      participant?: Participant,
-      publication?: TrackPublication,
-    ) => {
-      setTranscriptions((prev) => {
-        const newTranscriptions = { ...prev };
-        for (const segment of segments) {
-          newTranscriptions[segment.id] = {
-            ...segment,
-            participantName: participant && participant.name ? participant.name : '번역기',
-          };
-        }
-        return newTranscriptions;
-      });
-    };
-
-    room.on(RoomEvent.TranscriptionReceived, updateTranscriptions);
-    return () => {
-      room.off(RoomEvent.TranscriptionReceived, updateTranscriptions);
-    };
-  }, [room]);
-
-  return (
-    <div className={styles.transcriptionBox}>
-      <ul>
-        {Object.values(transcriptions)
-          .sort((a, b) => b.firstReceivedTime - a.firstReceivedTime)
-          .map((segment) => (
-            <li key={segment.id} style={{ listStyle: 'none' }}>
-              {segment.participantName}: {segment.text}
-            </li>
-          ))}
-      </ul>
-    </div>
   );
 }
