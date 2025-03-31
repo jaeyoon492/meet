@@ -245,10 +245,11 @@ function VideoConferenceComponent(props: {
 
       if (publication.kind === 'audio' && publication.trackName === 'translated') {
         const isFromSelf = publisherIdentity === room.localParticipant.identity;
+        const isAgentToSelf = publisherIdentity.endsWith(`-to-${room.localParticipant.identity}`);
         console.log(
           `[trackPublished] publisher: ${publisherIdentity}, self: ${room.localParticipant.identity}`,
         );
-        publication.setSubscribed(!isFromSelf); // 상대방 트랙만 구독
+        publication.setSubscribed(isAgentToSelf && !isFromSelf); // 상대방 트랙만 구독
       }
     };
 
@@ -258,7 +259,9 @@ function VideoConferenceComponent(props: {
       for (const pub of participant.trackPublications.values()) {
         if (pub.kind === 'audio' && pub.trackName === 'translated') {
           const isFromSelf = publisherIdentity === room.localParticipant.identity;
-          pub.setSubscribed(!isFromSelf);
+          const isAgentToSelf = publisherIdentity.endsWith(`-to-${room.localParticipant.identity}`);
+
+          pub.setSubscribed(isAgentToSelf && !isFromSelf);
         }
       }
     };
