@@ -23,6 +23,8 @@ import {
   DeviceUnsupportedError,
   RoomConnectOptions,
   Track,
+  RemoteTrackPublication,
+  RemoteParticipant,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -235,25 +237,38 @@ function VideoConferenceComponent(props: {
   useEffect(() => {
     if (!room || !room.localParticipant) return;
 
-    const syncTranslatedTrack = () => {
-      room.remoteParticipants.forEach((participant) => {
-        for (const pub of participant.trackPublications.values()) {
-          if (pub.kind === 'audio' && pub.trackName === 'translated') {
-            console.log(`Participant Identity:  ${participant.identity}`);
-            console.log(`localParticipant Identity:  ${room.localParticipant.identity}`);
-            const isFromSelf = participant.identity === room.localParticipant.identity;
-            pub.setSubscribed(!isFromSelf); // 나 자신이면 구독하지 않음
-          }
+    const syncTranslatedTrack = (
+      publication: RemoteTrackPublication,
+      participant: RemoteParticipant,
+    ) => {
+      const publisherIdentity = participant.identity;
+
+      if (publication.kind === 'audio' && publication.trackName === 'translated') {
+        const isFromSelf = publisherIdentity === room.localParticipant.identity;
+        console.log(
+          `[trackPublished] publisher: ${publisherIdentity}, self: ${room.localParticipant.identity}`,
+        );
+        publication.setSubscribed(!isFromSelf); // 상대방 트랙만 구독
+      }
+    };
+
+    const syncParticipantConnected = (participant: RemoteParticipant) => {
+      const publisherIdentity = participant.identity;
+
+      for (const pub of participant.trackPublications.values()) {
+        if (pub.kind === 'audio' && pub.trackName === 'translated') {
+          const isFromSelf = publisherIdentity === room.localParticipant.identity;
+          pub.setSubscribed(!isFromSelf);
         }
-      });
+      }
     };
 
     room.on('trackPublished', syncTranslatedTrack);
-    room.on('participantConnected', syncTranslatedTrack);
+    room.on('participantConnected', syncParticipantConnected);
 
     return () => {
       room.off('trackPublished', syncTranslatedTrack);
-      room.off('participantConnected', syncTranslatedTrack);
+      room.off('participantConnected', syncParticipantConnected);
     };
   }, [room]);
 
