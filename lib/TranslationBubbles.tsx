@@ -50,17 +50,9 @@ export function TranslationBubbles({ selfName }: { selfName: string }) {
     };
   }, [room]);
 
-  const [test, setT] = useState([
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1,
-  ]);
-
   return (
     <div className={styles.bubblesContainer}>
-      {test.map((i) => {
-        return <div key={i}>{i}</div>;
-      })}
-      {/* {bubbles.slice(-10).map((bubble) => {
+      {bubbles.slice(-10).map((bubble) => {
         const isSelf = bubble.from === selfName;
 
         return (
@@ -75,7 +67,7 @@ export function TranslationBubbles({ selfName }: { selfName: string }) {
             {<div className={styles.original}>({bubble.original})</div>}
           </div>
         );
-      })} */}
+      })}
     </div>
   );
 }
