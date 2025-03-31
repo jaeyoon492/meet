@@ -4,17 +4,14 @@ import { decodePassphrase } from '@/lib/client-utils';
 import { RecordingIndicator } from '@/lib/RecordingIndicator';
 import { ConnectionDetails } from '@/lib/types';
 import {
-  BarVisualizer,
   LiveKitRoom,
   LocalUserChoices,
   PreJoin,
   RoomAudioRenderer,
-  useVoiceAssistant,
   AgentState,
   ControlBar,
   useTracks,
   LayoutContextProvider,
-  useMaybeRoomContext,
   GridLayout,
 } from '@livekit/components-react';
 import {
@@ -26,10 +23,6 @@ import {
   DeviceUnsupportedError,
   RoomConnectOptions,
   Track,
-  TranscriptionSegment,
-  Participant,
-  TrackPublication,
-  RoomEvent,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -39,6 +32,7 @@ import styles from '../../../styles/PageClient.module.css';
 import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
 import { LanguageSelector } from '@/lib/LanguageSelector';
 import { TranslationBubbles } from '@/lib/TranslationBubbles';
+import { QRCodeDisplay } from '@/lib/QRCodeDisplay';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -237,6 +231,9 @@ function VideoConferenceComponent(props: {
 
   const [agentState, setAgentState] = useState<AgentState>('disconnected');
   const [showTranscriptions, setShowTranscriptions] = useState(false);
+  // 내부 상태
+  const [showQR, setShowQR] = useState(false);
+  const url = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
     <>
@@ -252,6 +249,25 @@ function VideoConferenceComponent(props: {
         onEncryptionError={handleEncryptionError}
         onError={handleError}
       >
+        <button
+          className="lk-button"
+          onClick={() => setShowQR((prev) => !prev)}
+          style={{
+            position: 'fixed',
+            right: '1.5rem',
+            top: '94%',
+            transform: 'translateY(-50%)',
+            padding: '0.6rem',
+            fontSize: '1.2rem',
+            borderRadius: '50%',
+            zIndex: 1001,
+            backgroundColor: '#222',
+            color: 'white',
+            boxShadow: '0 0 6px rgba(255,255,255,0.1)',
+          }}
+        >
+          📲
+        </button>
         <div
           style={{
             height: '100%',
@@ -270,6 +286,7 @@ function VideoConferenceComponent(props: {
         </div>
         <RecordingIndicator />
         <RoomAudioRenderer />
+        {showQR && <QRCodeDisplay url={window.location.href} onClose={() => setShowQR(false)} />}
       </LiveKitRoom>
     </>
   );
@@ -336,6 +353,7 @@ function CustomTrack({
             </button>
           </div>
         </div>
+
         <div
           style={{
             position: 'relative',
