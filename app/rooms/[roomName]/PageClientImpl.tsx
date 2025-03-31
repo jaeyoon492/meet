@@ -239,6 +239,8 @@ function VideoConferenceComponent(props: {
       room.remoteParticipants.forEach((participant) => {
         for (const pub of participant.trackPublications.values()) {
           if (pub.kind === 'audio' && pub.trackName === 'translated') {
+            console.log(`Participant Identity:  ${participant.identity}`);
+            console.log(`localParticipant Identity:  ${room.localParticipant.identity}`);
             const isFromSelf = participant.identity === room.localParticipant.identity;
             pub.setSubscribed(!isFromSelf); // 나 자신이면 구독하지 않음
           }
