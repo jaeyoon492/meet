@@ -229,11 +229,31 @@ function VideoConferenceComponent(props: {
     );
   }, []);
 
-  const [agentState, setAgentState] = useState<AgentState>('disconnected');
   const [showTranscriptions, setShowTranscriptions] = useState(false);
-  // 내부 상태
   const [showQR, setShowQR] = useState(false);
-  const url = typeof window !== 'undefined' ? window.location.href : '';
+
+  useEffect(() => {
+    if (!room || !room.localParticipant) return;
+
+    const syncTranslatedTrack = () => {
+      room.remoteParticipants.forEach((participant) => {
+        for (const pub of participant.trackPublications.values()) {
+          if (pub.kind === 'audio' && pub.trackName === 'translated') {
+            const isFromSelf = participant.identity === room.localParticipant.identity;
+            pub.setSubscribed(!isFromSelf); // 나 자신이면 구독하지 않음
+          }
+        }
+      });
+    };
+
+    room.on('trackPublished', syncTranslatedTrack);
+    room.on('participantConnected', syncTranslatedTrack);
+
+    return () => {
+      room.off('trackPublished', syncTranslatedTrack);
+      room.off('participantConnected', syncTranslatedTrack);
+    };
+  }, [room]);
 
   return (
     <>
