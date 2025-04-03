@@ -52,22 +52,25 @@ export function TranslationBubbles({ selfName }: { selfName: string }) {
 
   return (
     <div className={styles.bubblesContainer}>
-      {bubbles.slice(-10).map((bubble) => {
-        const isSelf = bubble.from === selfName;
+      {bubbles
+        .slice(-10)
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .map((bubble) => {
+          const isSelf = bubble.from === selfName;
 
-        return (
-          <div key={bubble.id} className={isSelf ? styles.bubbleRight : styles.bubbleLeft}>
-            <div className={styles.meta}>
-              <span className={styles.speaker}>{bubble.from}</span>
-              <span className={styles.time}>
-                {new Date(bubble.timestamp * 1000).toLocaleTimeString()}
-              </span>
+          return (
+            <div key={bubble.id} className={isSelf ? styles.bubbleRight : styles.bubbleLeft}>
+              <div className={styles.meta}>
+                <span className={styles.speaker}>{bubble.from}</span>
+                <span className={styles.time}>
+                  {new Date(bubble.timestamp * 1000).toLocaleTimeString()}
+                </span>
+              </div>
+              <div className={styles.text}>{bubble.text}</div>
+              {<div className={styles.original}>({bubble.original})</div>}
             </div>
-            <div className={styles.text}>{bubble.text}</div>
-            {<div className={styles.original}>({bubble.original})</div>}
-          </div>
-        );
-      })}
+          );
+        })}
     </div>
   );
 }
