@@ -13,6 +13,7 @@ import {
   useTracks,
   LayoutContextProvider,
   GridLayout,
+  VoiceAssistantControlBar,
 } from '@livekit/components-react';
 import {
   ExternalE2EEKeyProvider,
@@ -25,6 +26,7 @@ import {
   Track,
   RemoteTrackPublication,
   RemoteParticipant,
+  LogLevel,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -35,6 +37,8 @@ import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
 import { LanguageSelector } from '@/lib/LanguageSelector';
 import { TranslationBubbles } from '@/lib/TranslationBubbles';
 import { QRCodeDisplay } from '@/lib/QRCodeDisplay';
+import { DebugMode } from '@/lib/Debug';
+import MyKrispSetting from '@/lib/MyKrispSetting';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -327,6 +331,7 @@ function VideoConferenceComponent(props: {
         <RecordingIndicator />
         <RoomAudioRenderer />
         {showQR && <QRCodeDisplay url={window.location.href} onClose={() => setShowQR(false)} />}
+        <DebugMode logLevel={LogLevel.debug} />
       </LiveKitRoom>
     </>
   );
@@ -380,6 +385,7 @@ function CustomTrack({
           />
           <div style={{ display: 'flex', gap: 4 }}>
             <LanguageSelector language={language} />
+            <MyKrispSetting />
             <button
               className="lk-button"
               onClick={() => setShowTranscriptions(!showTranscriptions)}
@@ -420,6 +426,7 @@ function CustomTrack({
               />
             </div>
           </GridLayout>
+
           {showTranscriptions && <TranslationBubbles selfName={selfName} />}
         </div>
       </div>

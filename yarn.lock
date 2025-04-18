@@ -163,7 +163,7 @@
   resolved "https://registry.yarnpkg.com/@livekit/components-styles/-/components-styles-1.1.4.tgz#ef4c76b12c0e379e7e6f318458c7bd25f7f1e3c1"
   integrity sha512-QCupn7tQ/dy/WZclrfsgtDe8peiGYS6Ied1IGkKOysaXo04l90t62SIUTKyxgd0dNDhUDC0p34qCggGZs/44lQ==
 
-"@livekit/krisp-noise-filter@0.2.16":
+"@livekit/krisp-noise-filter@^0.2.16":
   version "0.2.16"
   resolved "https://registry.yarnpkg.com/@livekit/krisp-noise-filter/-/krisp-noise-filter-0.2.16.tgz#f7d259f4ce47224123297eee7a0041850f700b00"
   integrity sha512-W7fyNkECDbWLXwBW5CDKQvuW4mxhkKBp9UAvTkTsn6dq1w7ZLTIEdUErrfZiNVuHmbXd22wI1ycjOYvaeNKMvw==
