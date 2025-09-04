@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { Participant } from 'livekit-client';
+import { Participant, Room } from 'livekit-client';
 import { Track } from 'livekit-client';
 import type { ParticipantClickEvent, TrackReferenceOrPlaceholder } from '@livekit/components-core';
 import { isTrackReference, isTrackReferencePinned } from '@livekit/components-core';
@@ -24,6 +24,7 @@ import {
   useParticipantTile,
   VideoTrack,
 } from '@livekit/components-react';
+import { Overlay } from './Overlay';
 
 /**
  * The `ParticipantContextIfNeeded` component only creates a `ParticipantContext`
@@ -75,6 +76,7 @@ export interface ParticipantTileProps extends React.HTMLAttributes<HTMLDivElemen
   disableSpeakingIndicator?: boolean;
   onParticipantClick?: (event: ParticipantClickEvent) => void;
   barCount?: number;
+  room: Room;
 }
 
 /**
@@ -103,6 +105,7 @@ export const CustomParticipantTile: (
       onParticipantClick,
       disableSpeakingIndicator,
       barCount = 6,
+      room,
       ...htmlProps
     }: ParticipantTileProps,
     ref,
@@ -119,6 +122,7 @@ export const CustomParticipantTile: (
     const layoutContext = useMaybeLayoutContext();
 
     const autoManageSubscription = useFeatureContext()?.autoSubscription;
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     const handleSubscribe = React.useCallback(
       (subscribed: boolean) => {
@@ -137,61 +141,54 @@ export const CustomParticipantTile: (
 
     return (
       <div ref={ref} style={{ position: 'relative' }} {...elementProps}>
-        <TrackRefContextIfNeeded trackRef={trackReference}>
-          <ParticipantContextIfNeeded participant={trackReference.participant}>
-            {children ?? (
-              <>
-                {isTrackReference(trackReference) &&
-                (trackReference.publication?.kind === 'video' ||
-                  trackReference.source === Track.Source.Camera ||
-                  trackReference.source === Track.Source.ScreenShare) ? (
-                  <VideoTrack
-                    trackRef={trackReference}
-                    onSubscriptionStatusChanged={handleSubscribe}
-                    manageSubscription={autoManageSubscription}
-                  />
-                ) : (
-                  isTrackReference(trackReference) && (
-                    <>
-                      <AudioTrack
-                        trackRef={trackReference}
-                        onSubscriptionStatusChanged={handleSubscribe}
-                      />
-                      <BarVisualizer barCount={barCount} options={{ minHeight: 8 }} />
-                    </>
-                  )
-                )}
-                <div className="lk-participant-placeholder">
-                  <ParticipantPlaceholder />
-                </div>
-                <div className="lk-participant-metadata">
-                  <div className="lk-participant-metadata-item">
-                    {trackReference.source === Track.Source.Camera ? (
-                      <>
-                        {isEncrypted && <LockLockedIcon style={{ marginRight: '0.25rem' }} />}
-                        <TrackMutedIndicator
-                          trackRef={{
-                            participant: trackReference.participant,
-                            source: Track.Source.Microphone,
-                          }}
-                          show={'muted'}
-                        ></TrackMutedIndicator>
-                        <ParticipantName />
-                      </>
-                    ) : (
-                      <>
-                        <ScreenShareIcon style={{ marginRight: '0.25rem' }} />
-                        <ParticipantName>&apos;s screen</ParticipantName>
-                      </>
-                    )}
+        <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <TrackRefContextIfNeeded trackRef={trackReference}>
+            <ParticipantContextIfNeeded participant={trackReference.participant}>
+              {children ?? (
+                <>
+                  {isTrackReference(trackReference) &&
+                  trackReference.source === Track.Source.Camera ? (
+                    <VideoTrack style={{ objectFit: 'contain', transform: 'none' }} />
+                  ) : null}
+                  <div className="lk-participant-placeholder">
+                    <ParticipantPlaceholder />
                   </div>
-                  <ConnectionQualityIndicator className="lk-participant-metadata-item" />
-                </div>
-              </>
-            )}
-            <FocusToggle trackRef={trackReference} />
-          </ParticipantContextIfNeeded>
-        </TrackRefContextIfNeeded>
+                  <div className="lk-participant-metadata">
+                    <div className="lk-participant-metadata-item">
+                      {trackReference.source === Track.Source.Camera ? (
+                        <>
+                          {isEncrypted && <LockLockedIcon style={{ marginRight: '0.25rem' }} />}
+                          <TrackMutedIndicator
+                            trackRef={{
+                              participant: trackReference.participant,
+                              source: Track.Source.Microphone,
+                            }}
+                            show={'muted'}
+                          ></TrackMutedIndicator>
+                          <ParticipantName />
+                        </>
+                      ) : (
+                        <>
+                          {/* <ScreenShareIcon style={{ marginRight: '0.25rem' }} />
+                          <ParticipantName>&apos;s screen</ParticipantName> */}
+                        </>
+                      )}
+                    </div>
+                    <ConnectionQualityIndicator className="lk-participant-metadata-item" />
+                  </div>
+                  {trackReference.source === Track.Source.Camera && (
+                    <Overlay
+                      room={room}
+                      getVideoEl={() => containerRef.current?.querySelector('video') ?? null}
+                      participantIdentity={trackReference.participant.identity}
+                    />
+                  )}
+                </>
+              )}
+              <FocusToggle trackRef={trackReference} />
+            </ParticipantContextIfNeeded>
+          </TrackRefContextIfNeeded>
+        </div>
       </div>
     );
   },

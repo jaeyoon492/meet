@@ -39,6 +39,7 @@ import { TranslationBubbles } from '@/lib/TranslationBubbles';
 import { QRCodeDisplay } from '@/lib/QRCodeDisplay';
 import { DebugMode } from '@/lib/Debug';
 import MyKrispSetting from '@/lib/MyKrispSetting';
+import { Overlay } from '@/lib/Overlay';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -326,6 +327,7 @@ function VideoConferenceComponent(props: {
             setShowTranscriptions={setShowTranscriptions}
             language={props.language}
             selfName={room.localParticipant?.name ?? ''}
+            room={room}
           />
         </div>
         <RecordingIndicator />
@@ -342,18 +344,20 @@ function CustomTrack({
   setShowTranscriptions,
   language,
   selfName,
+  room,
 }: {
   showTranscriptions: boolean;
   setShowTranscriptions: (val: boolean) => void;
   language: string;
   selfName: string;
+  room: Room;
 }) {
   const [widgetState, setWidgetState] = React.useState<WidgetState>({
     showChat: false,
     unreadMessages: 0,
   });
 
-  const tracks = useTracks([Track.Source.Microphone, Track.Source.Camera]);
+  const tracks = useTracks([Track.Source.Camera]);
 
   return (
     <LayoutContextProvider onWidgetChange={setWidgetState}>
@@ -423,6 +427,7 @@ function CustomTrack({
                   left: 0,
                   zIndex: showTranscriptions ? 1 : 0,
                 }}
+                room={room}
               />
             </div>
           </GridLayout>
