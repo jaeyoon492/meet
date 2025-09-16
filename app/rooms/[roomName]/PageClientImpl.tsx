@@ -14,6 +14,7 @@ import {
   LayoutContextProvider,
   GridLayout,
   VoiceAssistantControlBar,
+  isTrackReference,
 } from '@livekit/components-react';
 import {
   ExternalE2EEKeyProvider,
@@ -40,6 +41,8 @@ import { QRCodeDisplay } from '@/lib/QRCodeDisplay';
 import { DebugMode } from '@/lib/Debug';
 import MyKrispSetting from '@/lib/MyKrispSetting';
 import { Overlay } from '@/lib/Overlay';
+import TranslationRealtime from '@/lib/TranslationRealtime';
+import { MicBoostOnConnect } from '@/lib/MicBoostOnConnect';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -294,6 +297,7 @@ function VideoConferenceComponent(props: {
         onEncryptionError={handleEncryptionError}
         onError={handleError}
       >
+        {/* <MicBoostOnConnect /> */}
         <button
           className="lk-button"
           onClick={() => setShowQR((prev) => !prev)}
@@ -357,7 +361,32 @@ function CustomTrack({
     unreadMessages: 0,
   });
 
-  const tracks = useTracks([Track.Source.Camera]);
+  const rawTracks = useTracks([Track.Source.Camera, Track.Source.Microphone], {
+    onlySubscribed: false,
+  }).filter((track) => !track.participant.isAgent);
+
+  // 카메라가 있으면 카메라, 없으면 마이크를 대표로 선택
+  const tracks = React.useMemo(() => {
+    const bySid = new Map<string, (typeof rawTracks)[number]>();
+
+    for (const tr of rawTracks) {
+      const sid = tr.participant.sid;
+      const prev = bySid.get(sid);
+
+      // 이미 저장된 게 없거나, 현재 트랙이 '카메라'라면 교체 (카메라 우선)
+      if (!prev) {
+        bySid.set(sid, tr);
+        continue;
+      }
+      const prevIsCam = isTrackReference(prev) && prev.source === Track.Source.Camera;
+      const curIsCam = isTrackReference(tr) && tr.source === Track.Source.Camera;
+      if (!prevIsCam && curIsCam) {
+        bySid.set(sid, tr);
+      }
+    }
+
+    return Array.from(bySid.values());
+  }, [rawTracks]);
 
   return (
     <LayoutContextProvider onWidgetChange={setWidgetState}>
@@ -432,7 +461,8 @@ function CustomTrack({
             </div>
           </GridLayout>
 
-          {showTranscriptions && <TranslationBubbles selfName={selfName} />}
+          {/* {showTranscriptions && <TranslationBubbles selfName={selfName} />} */}
+          {showTranscriptions && <TranslationRealtime selfName={selfName} />}
         </div>
       </div>
     </LayoutContextProvider>

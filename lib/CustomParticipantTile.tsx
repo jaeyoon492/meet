@@ -1,7 +1,11 @@
 import * as React from 'react';
-import { Participant, Room } from 'livekit-client';
+import { Participant, Room, TrackPublication } from 'livekit-client';
 import { Track } from 'livekit-client';
-import type { ParticipantClickEvent, TrackReferenceOrPlaceholder } from '@livekit/components-core';
+import type {
+  ParticipantClickEvent,
+  TrackReference,
+  TrackReferenceOrPlaceholder,
+} from '@livekit/components-core';
 import { isTrackReference, isTrackReferencePinned } from '@livekit/components-core';
 import {
   AudioTrack,
@@ -26,22 +30,7 @@ import {
 } from '@livekit/components-react';
 import { Overlay } from './Overlay';
 
-/**
- * The `ParticipantContextIfNeeded` component only creates a `ParticipantContext`
- * if there is no `ParticipantContext` already.
- * @example
- * ```tsx
- * <ParticipantContextIfNeeded participant={trackReference.participant}>
- *  ...
- * </ParticipantContextIfNeeded>
- * ```
- * @public
- */
-export function ParticipantContextIfNeeded(
-  props: React.PropsWithChildren<{
-    participant?: Participant;
-  }>,
-) {
+function ParticipantContextIfNeeded(props: React.PropsWithChildren<{ participant?: Participant }>) {
   const hasContext = !!useMaybeParticipantContext();
   return props.participant && !hasContext ? (
     <ParticipantContext.Provider value={props.participant}>
@@ -52,14 +41,8 @@ export function ParticipantContextIfNeeded(
   );
 }
 
-/**
- * Only create a `TrackRefContext` if there is no `TrackRefContext` already.
- * @internal
- */
-export function TrackRefContextIfNeeded(
-  props: React.PropsWithChildren<{
-    trackRef?: TrackReferenceOrPlaceholder;
-  }>,
+function TrackRefContextIfNeeded(
+  props: React.PropsWithChildren<{ trackRef?: TrackReferenceOrPlaceholder }>,
 ) {
   const hasContext = !!useMaybeTrackRefContext();
   return props.trackRef && !hasContext ? (
@@ -69,9 +52,7 @@ export function TrackRefContextIfNeeded(
   );
 }
 
-/** @public */
 export interface ParticipantTileProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** The track reference to display. */
   trackRef?: TrackReferenceOrPlaceholder;
   disableSpeakingIndicator?: boolean;
   onParticipantClick?: (event: ParticipantClickEvent) => void;
@@ -79,25 +60,7 @@ export interface ParticipantTileProps extends React.HTMLAttributes<HTMLDivElemen
   room: Room;
 }
 
-/**
- * The `ParticipantTile` component is the base utility wrapper for displaying a visual representation of a participant.
- * This component can be used as a child of the `TrackLoop` component or by passing a track reference as property.
- *
- * @example Using the `ParticipantTile` component with a track reference:
- * ```tsx
- * <ParticipantTile trackRef={trackRef} />
- * ```
- * @example Using the `ParticipantTile` component as a child of the `TrackLoop` component:
- * ```tsx
- * <TrackLoop>
- *  <ParticipantTile />
- * </TrackLoop>
- * ```
- * @public
- */
-export const CustomParticipantTile: (
-  props: ParticipantTileProps & React.RefAttributes<HTMLDivElement>,
-) => React.ReactNode = /* @__PURE__ */ React.forwardRef<HTMLDivElement, ParticipantTileProps>(
+export const CustomParticipantTile = React.forwardRef<HTMLDivElement, ParticipantTileProps>(
   function ParticipantTile(
     {
       trackRef,
@@ -110,82 +73,153 @@ export const CustomParticipantTile: (
     }: ParticipantTileProps,
     ref,
   ) {
-    const trackReference = useEnsureTrackRef(trackRef);
+    const givenTrackRef = useEnsureTrackRef(trackRef);
 
     const { elementProps } = useParticipantTile<HTMLDivElement>({
       htmlProps,
       disableSpeakingIndicator,
       onParticipantClick,
-      trackRef: trackReference,
+      trackRef: givenTrackRef,
     });
-    const isEncrypted = useIsEncrypted(trackReference.participant);
-    const layoutContext = useMaybeLayoutContext();
 
+    const participant = givenTrackRef.participant;
+    const isEncrypted = useIsEncrypted(participant);
+    const layoutContext = useMaybeLayoutContext();
     const autoManageSubscription = useFeatureContext()?.autoSubscription;
     const containerRef = React.useRef<HTMLDivElement>(null);
+
+    // --- 1) 퍼블리케이션 상태 가져오기 ---
+    const camPub = participant.getTrackPublication(Track.Source.Camera);
+    const micPub = participant.getTrackPublication(Track.Source.Microphone);
+
+    // 오디오 트랙 존재/생존 여부
+    const showVideo = !!camPub && camPub.isSubscribed && !camPub.isMuted && !!camPub.track;
+
+    const audioReady =
+      !!micPub?.track?.mediaStreamTrack &&
+      micPub.track.mediaStreamTrack.kind === 'audio' &&
+      micPub.track.mediaStreamTrack.readyState === 'live' &&
+      micPub.isSubscribed &&
+      !micPub.isMuted;
+
+    const showAudioBars = !showVideo && audioReady;
+
+    // --- 2) 각 소스별 TrackRef 구성 ---
+    const cameraRef = React.useMemo<TrackReference | undefined>(
+      () =>
+        camPub
+          ? {
+              participant,
+              source: Track.Source.Camera,
+              publication: camPub as TrackPublication, // typing 보강
+            }
+          : undefined,
+      [participant, camPub],
+    );
+
+    const microphoneRef = React.useMemo(
+      () =>
+        micPub ? { participant, source: Track.Source.Microphone, publication: micPub } : undefined,
+      [participant, micPub],
+    );
 
     const handleSubscribe = React.useCallback(
       (subscribed: boolean) => {
         if (
-          trackReference.source &&
+          givenTrackRef.source &&
           !subscribed &&
           layoutContext &&
           layoutContext.pin.dispatch &&
-          isTrackReferencePinned(trackReference, layoutContext.pin.state)
+          isTrackReferencePinned(givenTrackRef, layoutContext.pin.state)
         ) {
           layoutContext.pin.dispatch({ msg: 'clear_pin' });
         }
       },
-      [trackReference, layoutContext],
+      [givenTrackRef, layoutContext],
     );
 
     return (
       <div ref={ref} style={{ position: 'relative' }} {...elementProps}>
         <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
-          <TrackRefContextIfNeeded trackRef={trackReference}>
-            <ParticipantContextIfNeeded participant={trackReference.participant}>
+          {/* TrackRef/Participant 컨텍스트 보장 */}
+          <TrackRefContextIfNeeded trackRef={givenTrackRef}>
+            <ParticipantContextIfNeeded participant={participant}>
               {children ?? (
                 <>
-                  {isTrackReference(trackReference) &&
-                  trackReference.source === Track.Source.Camera ? (
-                    <VideoTrack style={{ objectFit: 'contain', transform: 'none' }} />
-                  ) : null}
-                  <div className="lk-participant-placeholder">
-                    <ParticipantPlaceholder />
-                  </div>
+                  {/* --- 3) 표시 로직: 비디오 > 오디오 바 > 플레이스홀더 --- */}
+                  {showVideo ? (
+                    <TrackRefContextIfNeeded trackRef={cameraRef}>
+                      <VideoTrack style={{ objectFit: 'contain', transform: 'none' }} />
+                    </TrackRefContextIfNeeded>
+                  ) : showAudioBars && microphoneRef ? (
+                    // ★ 마이크 컨텍스트 강제 + AudioTrack을 먼저 렌더
+                    <TrackRefContextIfNeeded trackRef={microphoneRef}>
+                      <AudioTrack
+                        trackRef={microphoneRef}
+                        onSubscriptionStatusChanged={handleSubscribe}
+                      />
+                      <BarVisualizer
+                        trackRef={microphoneRef}
+                        key={`${participant.sid}-mic`} // ★ 전환 시 리마운트
+                        barCount={barCount}
+                        options={{ minHeight: 8 }}
+                      />
+                    </TrackRefContextIfNeeded>
+                  ) : (
+                    <div className="lk-participant-placeholder">
+                      <ParticipantPlaceholder />
+                    </div>
+                  )}
+
+                  {/* --- 4) 메타데이터 영역 --- */}
                   <div className="lk-participant-metadata">
                     <div className="lk-participant-metadata-item">
-                      {trackReference.source === Track.Source.Camera ? (
+                      {showVideo ? (
                         <>
                           {isEncrypted && <LockLockedIcon style={{ marginRight: '0.25rem' }} />}
                           <TrackMutedIndicator
                             trackRef={{
-                              participant: trackReference.participant,
+                              participant,
                               source: Track.Source.Microphone,
                             }}
                             show={'muted'}
-                          ></TrackMutedIndicator>
+                          />
+                          <ParticipantName />
+                        </>
+                      ) : showAudioBars ? (
+                        <>
+                          {/* 오디오 전용일 때도 이름/뮤트 표시 */}
+                          <TrackMutedIndicator
+                            trackRef={{
+                              participant,
+                              source: Track.Source.Microphone,
+                            }}
+                            show={'muted'}
+                          />
                           <ParticipantName />
                         </>
                       ) : (
                         <>
-                          {/* <ScreenShareIcon style={{ marginRight: '0.25rem' }} />
-                          <ParticipantName>&apos;s screen</ParticipantName> */}
+                          <ScreenShareIcon style={{ marginRight: '0.25rem' }} />
+                          <ParticipantName>&apos;s screen</ParticipantName>
                         </>
                       )}
                     </div>
                     <ConnectionQualityIndicator className="lk-participant-metadata-item" />
                   </div>
-                  {trackReference.source === Track.Source.Camera && (
+
+                  {/* --- 5) 비디오일 때만 Overlay 렌더 --- */}
+                  {showVideo && (
                     <Overlay
                       room={room}
                       getVideoEl={() => containerRef.current?.querySelector('video') ?? null}
-                      participantIdentity={trackReference.participant.identity}
+                      participantIdentity={participant.identity}
                     />
                   )}
                 </>
               )}
-              <FocusToggle trackRef={trackReference} />
+              {/* 포커스 토글은 주 TrackRef로 동작 */}
+              <FocusToggle trackRef={givenTrackRef} />
             </ParticipantContextIfNeeded>
           </TrackRefContextIfNeeded>
         </div>
