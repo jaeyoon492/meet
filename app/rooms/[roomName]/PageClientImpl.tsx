@@ -435,31 +435,34 @@ function CustomTrack({
 
         <div
           style={{
-            position: 'relative',
             width: '100%',
             height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: 'grid',
+            gridTemplateColumns: showTranscriptions ? '1fr minmax(140px, 32vh)' : '1fr',
+            rowGap: 8,
+            minHeight: 0,
+            position: 'relative',
           }}
         >
-          <GridLayout tracks={tracks}>
-            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-              <CustomParticipantTile
-                barCount={5}
-                style={{
-                  border: '#ffffff33 1px solid',
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  top: 0,
-                  left: 0,
-                  zIndex: showTranscriptions ? 1 : 0,
-                }}
-                room={room}
-              />
-            </div>
-          </GridLayout>
+          <div style={{ position: 'relative', minHeight: 0 }}>
+            <GridLayout tracks={tracks}>
+              <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                <CustomParticipantTile
+                  barCount={5}
+                  style={{
+                    border: '#ffffff33 1px solid',
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    top: 0,
+                    left: 0,
+                    zIndex: showTranscriptions ? 1 : 0,
+                  }}
+                  room={room}
+                />
+              </div>
+            </GridLayout>
+          </div>
 
           {/* {showTranscriptions && <TranslationBubbles selfName={selfName} />} */}
           {showTranscriptions && <TranslationRealtime selfName={selfName} />}

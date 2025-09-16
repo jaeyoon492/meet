@@ -216,35 +216,38 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
   console.log(items);
 
   return (
-    <div className={styles.bubblesContainer}>
-      {items.map((b) => {
-        const isSelf = b.fromName === selfName && b.role === 'user';
-        const sideCls = isSelf ? styles.bubbleRight : styles.bubbleLeft;
-        const showTranslating = !b.translationFinal && !!b.transcript && b.translation.length === 0;
+    <div className={styles.chatWrapper}>
+      <div className={styles.bubblesContainer}>
+        {items.map((b) => {
+          const isSelf = b.fromName === selfName && b.role === 'user';
+          const sideCls = isSelf ? styles.bubbleRight : styles.bubbleLeft;
+          const showTranslating =
+            !b.translationFinal && !!b.transcript && b.translation.length === 0;
 
-        return (
-          <div key={b.id} className={sideCls}>
-            <div className={styles.meta}>
-              <span className={styles.speaker}>{b.role === 'agent' ? 'Agent' : b.fromName}</span>
-              <span className={styles.time}>{new Date(b.startedAt).toLocaleTimeString()}</span>
-              {!b.transcriptFinal && <span className={styles.partial}> • listening…</span>}
-            </div>
-
-            {/* 윗줄: 번역 (진행 중이면 translating...) */}
-            <div className={styles.text}>
-              {showTranslating ? '(translating...)' : b.translation}
-            </div>
-
-            {/* 아랫줄: 전사(원문) */}
-            {b.transcript && (
-              <div className={styles.original}>
-                {b.transcript}
-                {!b.transcriptFinal && <span className={styles.partial}> ▋</span>}
+          return (
+            <div key={b.id} className={sideCls}>
+              <div className={styles.meta}>
+                <span className={styles.speaker}>{b.role === 'agent' ? 'Agent' : b.fromName}</span>
+                <span className={styles.time}>{new Date(b.startedAt).toLocaleTimeString()}</span>
+                {!b.transcriptFinal && <span className={styles.partial}> • listening…</span>}
               </div>
-            )}
-          </div>
-        );
-      })}
+
+              {/* 윗줄: 번역 (진행 중이면 translating...) */}
+              <div className={styles.text}>
+                {showTranslating ? '(translating...)' : b.translation}
+              </div>
+
+              {/* 아랫줄: 전사(원문) */}
+              {b.transcript && (
+                <div className={styles.original}>
+                  {b.transcript}
+                  {!b.transcriptFinal && <span className={styles.partial}> ▋</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
