@@ -36,8 +36,6 @@ export interface Bubble {
 /* 유틸리티 함수들                                                             */
 /* -------------------------------------------------------------------------- */
 
-const ATTACH_WINDOW_MS = 8000;
-
 /** 초/불명확 → ms 로 표준화 */
 function toMilliseconds(t?: number): number {
   if (t === undefined || t === null) return Date.now();
