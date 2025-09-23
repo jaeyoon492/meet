@@ -1,26 +1,21 @@
 'use client';
 
-import { decodePassphrase } from '@/lib/client-utils';
+import { decodePassphrase, randomString } from '@/lib/client-utils';
 import { RecordingIndicator } from '@/lib/RecordingIndicator';
 import { ConnectionDetails } from '@/lib/types';
 import {
   LiveKitRoom,
   LocalUserChoices,
-  PreJoin,
   RoomAudioRenderer,
-  AgentState,
-  ControlBar,
   useTracks,
   LayoutContextProvider,
-  GridLayout,
   CarouselLayout,
   TrackLoop,
-  VoiceAssistantControlBar,
   isTrackReference,
   FocusLayoutContainer,
   FocusLayout,
   usePinnedTracks,
-  FocusToggle,
+  useMediaDeviceSelect,
 } from '@livekit/components-react';
 import {
   ExternalE2EEKeyProvider,
@@ -68,90 +63,66 @@ export function PageClientImpl(props: {
   const [preJoinChoices, setPreJoinChoices] = React.useState<LocalUserChoices | undefined>(
     undefined,
   );
-  const preJoinDefaults = React.useMemo(() => {
-    return {
-      username: '',
-      videoEnabled: true,
-      audioEnabled: true,
-    };
-  }, []);
   const [connectionDetails, setConnectionDetails] = React.useState<ConnectionDetails | undefined>(
     undefined,
   );
-  const [language, setLanguage] = useState('en'); // 기본 언어
-  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLanguage(e.target.value);
-  };
+  const [language, setLanguage] = useState('ko'); // 기본 언어: 요청에 따라 'ko'
+  // 브라우저 기본 장치 ID 조회 (권한 전이면 'default'가 반환될 수 있음)
+  const { activeDeviceId: defaultAudioId } = useMediaDeviceSelect({ kind: 'audioinput' });
+  const { activeDeviceId: defaultVideoId } = useMediaDeviceSelect({ kind: 'videoinput' });
 
-  const handlePreJoinSubmit = React.useCallback(
-    async (values: LocalUserChoices) => {
-      setPreJoinChoices(values);
+  // PreJoin 없이 자동 참가: 마운트 시 기본 사용자/언어로 토큰 발급 → 접속
+  React.useEffect(() => {
+    let cancelled = false;
+    async function autoJoin() {
+      try {
+        if (connectionDetails) return;
+        const username = `테스터${randomString(4)}`;
+        const choices: LocalUserChoices = {
+          username,
+          videoEnabled: true,
+          audioEnabled: true,
+          videoDeviceId: defaultVideoId || 'default',
+          audioDeviceId: defaultAudioId || 'default',
+        };
+        setPreJoinChoices(choices);
 
-      const metadata = JSON.stringify({
-        preferred_language: language, // 👈 여기서 선택된 언어를 포함
-      });
+        const metadata = JSON.stringify({ preferred_language: 'ko' });
+        const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
+        url.searchParams.append('roomName', props.roomName);
+        url.searchParams.append('participantName', username);
+        url.searchParams.append('metadata', metadata);
+        if (props.region) url.searchParams.append('region', props.region);
 
-      const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
-      url.searchParams.append('roomName', props.roomName);
-      url.searchParams.append('participantName', values.username);
-      url.searchParams.append('metadata', metadata); // 👈 추가된 부분
-
-      if (props.region) {
-        url.searchParams.append('region', props.region);
+        const resp = await fetch(url.toString());
+        const data = await resp.json();
+        if (!cancelled) setConnectionDetails(data);
+      } catch (e) {
+        console.error(e);
       }
-
-      const connectionDetailsResp = await fetch(url.toString());
-      const connectionDetailsData = await connectionDetailsResp.json();
-      setConnectionDetails(connectionDetailsData);
-    },
-    [language, props.roomName, props.region],
-  );
-  const handlePreJoinError = React.useCallback((e: any) => console.error(e), []);
+    }
+    autoJoin();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionDetails, props.roomName, props.region, defaultAudioId, defaultVideoId]);
 
   return (
     <main
       data-lk-theme="default"
       className="flex flex-col justify-center items-center h-full bg-black text-white p-4 md:p-2"
     >
-      {connectionDetails === undefined || preJoinChoices === undefined ? (
-        <div className="flex flex-col items-center gap-6 p-8 bg-neutral-900 rounded-2xl shadow border border-white/20 w-min">
-          <div className="flex items-center justify-center gap-2.5">
-            <label htmlFor="language-select" className="text-base font-semibold text-neutral-100">
-              Preferred Language:
-            </label>
-            <select
-              id="language-select"
-              value={language}
-              onChange={handleChange}
-              className="px-4 py-2 rounded-md border border-white/50 bg-black text-white text-base focus:outline-none focus:border-white"
-            >
-              {LANGUAGE_OPTIONS.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <PreJoin
-            defaults={preJoinDefaults}
-            onSubmit={handlePreJoinSubmit}
-            onError={handlePreJoinError}
-            style={{
-              borderRadius: '12px',
-              background: 'linear-gradient(to bottom right, #181717, #1a1a1a)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.7)',
-              display: 'grid',
-              alignItems: 'center',
-            }}
-          />
-        </div>
-      ) : (
+      {connectionDetails && preJoinChoices ? (
         <VideoConferenceComponent
           connectionDetails={connectionDetails}
           userChoices={preJoinChoices}
           options={{ codec: props.codec, hq: props.hq }}
           language={language}
         />
+      ) : (
+        <div className="flex flex-col items-center gap-6 p-8 bg-neutral-900 rounded-2xl shadow border border-white/20">
+          <div className="text-sm opacity-80">미팅에 연결 중…</div>
+        </div>
       )}
     </main>
   );
@@ -403,14 +374,14 @@ function CustomTrack({
           style={{
             width: '100%',
             height: '100%',
-            display: 'grid',
-            gridTemplateColumns: '1fr',
+            display: 'flex',
+            flexDirection: 'column',
             rowGap: 8,
             minHeight: 0,
             position: 'relative',
           }}
         >
-          <div style={{ position: 'relative', minHeight: 0 }}>
+          <div style={{ width: '100%', height: '100%', position: 'relative', minHeight: 0 }}>
             <FocusArea tracks={tracks} room={room} showTranscriptions={showTranscriptions} />
           </div>
 
@@ -497,8 +468,8 @@ function FocusArea({
           position: 'absolute',
           gap: 8,
           zIndex: 30,
-          bottom: '4px',
-          right: '4px',
+          bottom: '8px',
+          right: '8px',
         }}
       >
         <CustomParticipantTile

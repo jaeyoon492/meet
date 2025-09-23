@@ -307,10 +307,10 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
 
   return (
     <div
-      className="relative max-[400px]:absolute h-full max-[400px]:h-1/4 max-[400px]:w-full min-h-0 max-[400px]:bottom-0"
+      className="relative h-full max-[640px]:h-2/5 max-[640px]:w-full min-h-0 max-[640px]:bottom-0"
       aria-live="polite"
     >
-      <div className="w-full h-full absolute z-30 overflow-y-auto bg-dark100 opacity-70 p-3 sm:p-4 border-0 rounded-[20px] text-sm sm:text-[0.95rem] md:mr-2 md:mb-4 mr-0 mb-0 flex flex-col gap-1">
+      <div className="w-full h-full absolute z-30 overflow-y-auto bg-dark100 p-3 sm:p-4 border-0 rounded-[20px] text-sm sm:text-[0.95rem] md:mr-2 md:mb-4 mr-0 mb-0 flex flex-col gap-1">
         {items.map((b) => {
           const isSelfUser = b.fromName === selfName && b.role === 'user';
           const sideClass = isSelfUser
