@@ -1,7 +1,6 @@
 import { useMaybeRoomContext } from '@livekit/components-react';
 import { Participant, RoomEvent, TrackPublication, TranscriptionSegment } from 'livekit-client';
 import { useEffect, useState } from 'react';
-import styles from '../../../styles/PageClient.module.css';
 
 // Extended interface: participantName을 추가합니다.
 interface ExtendedTranscriptionSegment extends TranscriptionSegment {
@@ -57,12 +56,12 @@ export default function Transcriptions() {
   }, [room]);
 
   return (
-    <div className={styles.transcriptionBox}>
-      <ul>
+    <div className="w-full md:w-[500px] h-full overflow-y-auto bg-neutral-900 p-4 border border-white/20 text-white text-[0.95rem] rounded-md md:mr-2 md:mb-4">
+      <ul className="list-none p-0 m-0">
         {Object.values(transcriptions)
           .sort((a, b) => b.firstReceivedTime - a.firstReceivedTime)
           .map((segment) => (
-            <li key={segment.id} style={{ listStyle: 'none' }}>
+            <li key={segment.id} className="mb-3 border-b border-white/15 pb-2">
               {segment.participantName}: {segment.text}
             </li>
           ))}

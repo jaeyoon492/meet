@@ -3,69 +3,20 @@
 
 import React from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import styles from '../styles/QRCodeDisplay.module.css';
 
 export function QRCodeDisplay({ url, onClose }: { url: string; onClose: () => void }) {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        background: '#111',
-        padding: '2rem',
-        borderBottomLeftRadius: '1rem',
-        borderBottomRightRadius: '1rem',
-        boxShadow: '0 -4px 10px rgba(0,0,0,0.3)',
-        zIndex: 1000,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        animation: 'slideUp 0.3s ease-out',
-      }}
-    >
-      <div
-        style={{
-          textAlign: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
+    <div className="fixed top-0 left-0 w-full bg-[#111] p-8 rounded-b-2xl shadow-[0_-4px_10px_rgba(0,0,0,0.3)] z-[1000] flex items-center justify-center animate-in slide-in-from-top duration-300 ease-out">
+      <div className="text-center flex flex-col items-center justify-center">
         <QRCodeCanvas value={url} size={180} />
-        <p style={{ color: '#fff', marginTop: '1rem' }}>{url}</p>
+        <p className="text-white mt-4 break-words">{url}</p>
         <button
           onClick={onClose}
-          style={{
-            marginTop: '1rem',
-            padding: '0.5rem 1rem',
-            background: '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-          }}
+          className="mt-4 px-4 py-2 bg-neutral-700 text-white rounded-lg cursor-pointer"
         >
           닫기
         </button>
       </div>
-
-      <style>
-        {`
-          @keyframes slideUp {
-            from {
-              transform: translateY(-100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateY(0);
-              opacity: 1;
-            }
-          }
-        `}
-      </style>
     </div>
   );
 }

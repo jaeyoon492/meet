@@ -11,16 +11,6 @@ export function LanguageSelector(prop: { language: string }) {
     return str.slice(0, 3) + '...';
   }
 
-  // useEffect(() => {
-  //   if (room?.localParticipant && selectedLang) {
-  //     console.log('Setting language metadata:', selectedLang);
-
-  //     room.localParticipant
-  //       .setMetadata(JSON.stringify({ preferred_language: selectedLang }))
-  //       .catch((e) => console.error('Metadata update failed:', e));
-  //   }
-  // }, [selectedLang, room]);
-
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (room?.localParticipant && selectedLang) {
       setSelectedLang(e.target.value);

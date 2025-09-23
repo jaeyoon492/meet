@@ -5,7 +5,7 @@ import { setLogLevel, LogLevel, RemoteTrackPublication, setLogExtension } from '
 import { tinykeys } from 'tinykeys';
 import { datadogLogs } from '@datadog/browser-logs';
 
-import styles from '../styles/Debug.module.css';
+// Tailwind migration: replaced styles/Debug.module.css with utility classes
 
 export const useDebugMode = ({ logLevel }: { logLevel?: LogLevel }) => {
   const room = useRoomContext();
@@ -113,7 +113,7 @@ export const DebugMode = ({ logLevel }: { logLevel?: LogLevel }) => {
     return <></>;
   } else {
     return (
-      <div className={styles.overlay}>
+      <div className="absolute top-0 bg-black/60 p-4 max-h-[100vh] overflow-y-auto z-[99]">
         <section id="room-info">
           <h3>
             Room Info {room.name}: {roomSid}
@@ -123,11 +123,11 @@ export const DebugMode = ({ logLevel }: { logLevel?: LogLevel }) => {
           <summary>
             <b>Local Participant: {lp.identity}</b>
           </summary>
-          <details open className={styles.detailsSection}>
+          <details open className="pl-4">
             <summary>
               <b>Published tracks</b>
             </summary>
-            <div>
+            <div className="pl-4">
               {Array.from(lp.trackPublications.values()).map((t) => (
                 <>
                   <div>
@@ -190,14 +190,14 @@ export const DebugMode = ({ logLevel }: { logLevel?: LogLevel }) => {
             <b>Remote Participants</b>
           </summary>
           {Array.from(room.remoteParticipants.values()).map((p) => (
-            <details key={p.sid} className={styles.detailsSection}>
+            <details key={p.sid} className="pl-4">
               <summary>
                 <b>
                   {p.identity}
                   <span></span>
                 </b>
               </summary>
-              <div>
+              <div className="pl-4">
                 {Array.from(p.trackPublications.values()).map((t) => (
                   <>
                     <div>

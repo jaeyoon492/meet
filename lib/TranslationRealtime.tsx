@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMaybeRoomContext } from '@livekit/components-react';
 import { RoomEvent, Participant, DataPacket_Kind } from 'livekit-client';
-import styles from '../styles/TranslationBubbles.module.css';
+// Tailwind migration: replaced styles/TranslationBubbles.module.css with utility classes
 
 /** 역할 구분: 사용자가 말한 전사인지, 에이전트 발화/텍스트인지 구분 */
 type Role = 'user' | 'agent';
@@ -306,33 +306,38 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
   }, [version]);
 
   return (
-    <div className={styles.chatWrapper}>
-      <div className={styles.bubblesContainer}>
+    <div
+      className="relative max-[400px]:absolute h-full max-[400px]:h-1/4 max-[400px]:w-full min-h-0 max-[400px]:bottom-0"
+      aria-live="polite"
+    >
+      <div className="w-full h-full absolute z-30 overflow-y-auto bg-dark100 opacity-70 p-3 sm:p-4 border-0 rounded-[20px] text-sm sm:text-[0.95rem] md:mr-2 md:mb-4 mr-0 mb-0 flex flex-col gap-1">
         {items.map((b) => {
           const isSelfUser = b.fromName === selfName && b.role === 'user';
-          const sideClass = isSelfUser ? styles.bubbleRight : styles.bubbleLeft;
+          const sideClass = isSelfUser
+            ? 'max-w-[85%] md:max-w-[70%] px-3 py-2 rounded-2xl text-white inline-block relative self-end bg-sky-600/70'
+            : 'max-w-[85%] md:max-w-[70%] px-3 py-2 rounded-2xl text-white inline-block relative self-start bg-white/10';
 
           const showTranslatingPlaceholder =
             !b.translationFinal && !!b.transcript && b.translation.length === 0;
 
           return (
             <div key={b.id} className={sideClass}>
-              <div className={styles.meta}>
-                <span className={styles.speaker}>{b.role === 'agent' ? 'Agent' : b.fromName}</span>
-                <span className={styles.time}>{new Date(b.startedAt).toLocaleTimeString()}</span>
-                {!b.transcriptFinal && <span className={styles.partial}> • listening…</span>}
+              <div className="text-xs opacity-70 mb-1">
+                <span className="font-bold mr-1">{b.role === 'agent' ? 'Agent' : b.fromName}</span>
+                <span className="ml-1">{new Date(b.startedAt).toLocaleTimeString()}</span>
+                {!b.transcriptFinal && <span className="opacity-70"> {'\u2022'} listening…</span>}
               </div>
 
               {/* 윗줄: 번역 (번역 중이면 placeholder) */}
-              <div className={styles.text}>
+              <div className="break-words">
                 {showTranslatingPlaceholder ? '(translating...)' : b.translation}
               </div>
 
               {/* 아랫줄: 전사(원문) */}
               {b.transcript && (
-                <div className={styles.original}>
+                <div className="text-sm opacity-50 mt-1">
                   {b.transcript}
-                  {!b.transcriptFinal && <span className={styles.partial}> ▋</span>}
+                  {!b.transcriptFinal && <span className="opacity-70"> ▋</span>}
                 </div>
               )}
             </div>

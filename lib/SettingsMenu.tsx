@@ -9,7 +9,7 @@ import {
   useIsRecording,
 } from '@livekit/components-react';
 import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
-import styles from '../styles/SettingsMenu.module.css';
+// Tailwind migration: replaced styles/SettingsMenu.module.css with utility classes
 
 /**
  * @alpha
@@ -83,13 +83,15 @@ export function SettingsMenu(props: SettingsMenuProps) {
   };
 
   return (
-    <div className="settings-menu" style={{ width: '100%' }} {...props}>
-      <div className={styles.tabs}>
+    <div className="settings-menu w-full" {...props}>
+      <div className="relative flex flex-wrap items-center gap-2">
         {tabs.map(
           (tab) =>
             settings[tab] && (
               <button
-                className={`${styles.tab} lk-button`}
+                className={`lk-button rounded-none pb-2 border-b-4 ${
+                  tab === activeTab ? 'border-[var(--lk-accent-bg)]' : 'border-[var(--bg5)]'
+                }`}
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 aria-pressed={tab === activeTab}
@@ -172,7 +174,7 @@ export function SettingsMenu(props: SettingsMenuProps) {
         )}
       </div>
       <button
-        className={`lk-button ${styles.settingsCloseButton}`}
+        className={`lk-button absolute right-[var(--lk-grid-gap)] bottom-[var(--lk-grid-gap)]`}
         onClick={() => layoutContext?.widget.dispatch?.({ msg: 'toggle_settings' })}
       >
         Close

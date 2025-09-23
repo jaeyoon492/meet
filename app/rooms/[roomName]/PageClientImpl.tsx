@@ -13,8 +13,14 @@ import {
   useTracks,
   LayoutContextProvider,
   GridLayout,
+  CarouselLayout,
+  TrackLoop,
   VoiceAssistantControlBar,
   isTrackReference,
+  FocusLayoutContainer,
+  FocusLayout,
+  usePinnedTracks,
+  FocusToggle,
 } from '@livekit/components-react';
 import {
   ExternalE2EEKeyProvider,
@@ -30,10 +36,13 @@ import {
   LogLevel,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
-import type { ReceivedTranscriptionSegment, WidgetState } from '@livekit/components-core';
+import React, { useCallback, useEffect, useState } from 'react';
+import type {
+  ReceivedTranscriptionSegment,
+  WidgetState,
+  TrackReferenceOrPlaceholder,
+} from '@livekit/components-core';
 import { LANGUAGE_OPTIONS } from '@/lib/constants';
-import styles from '../../../styles/PageClient.module.css';
 import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
 import { LanguageSelector } from '@/lib/LanguageSelector';
 import { TranslationBubbles } from '@/lib/TranslationBubbles';
@@ -43,6 +52,8 @@ import MyKrispSetting from '@/lib/MyKrispSetting';
 import { Overlay } from '@/lib/Overlay';
 import TranslationRealtime from '@/lib/TranslationRealtime';
 import { MicBoostOnConnect } from '@/lib/MicBoostOnConnect';
+import { CustomControlBar } from '@/lib/CustomControlBar';
+import { LanguageBottomDrawer } from '@/lib/Language';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
@@ -98,18 +109,21 @@ export function PageClientImpl(props: {
   const handlePreJoinError = React.useCallback((e: any) => console.error(e), []);
 
   return (
-    <main data-lk-theme="default" className={styles.container}>
+    <main
+      data-lk-theme="default"
+      className="flex flex-col justify-center items-center h-full bg-black text-white p-4 md:p-2"
+    >
       {connectionDetails === undefined || preJoinChoices === undefined ? (
-        <div className={styles.preJoinContainer}>
-          <div className={styles.languageSelector}>
-            <label htmlFor="language-select" className={styles.languageLabel}>
+        <div className="flex flex-col items-center gap-6 p-8 bg-neutral-900 rounded-2xl shadow border border-white/20 w-min">
+          <div className="flex items-center justify-center gap-2.5">
+            <label htmlFor="language-select" className="text-base font-semibold text-neutral-100">
               Preferred Language:
             </label>
             <select
               id="language-select"
               value={language}
               onChange={handleChange}
-              className={styles.languageSelect}
+              className="px-4 py-2 rounded-md border border-white/50 bg-black text-white text-base focus:outline-none focus:border-white"
             >
               {LANGUAGE_OPTIONS.map((lang) => (
                 <option key={lang.code} value={lang.code}>
@@ -284,62 +298,41 @@ function VideoConferenceComponent(props: {
   }, [room]);
 
   return (
-    <>
-      <LiveKitRoom
-        connect={e2eeSetupComplete}
-        room={room}
-        token={props.connectionDetails.participantToken}
-        serverUrl={props.connectionDetails.serverUrl}
-        connectOptions={connectOptions}
-        video={props.userChoices.videoEnabled}
-        audio={props.userChoices.audioEnabled}
-        onDisconnected={handleOnLeave}
-        onEncryptionError={handleEncryptionError}
-        onError={handleError}
+    <LiveKitRoom
+      connect={e2eeSetupComplete}
+      room={room}
+      token={props.connectionDetails.participantToken}
+      serverUrl={props.connectionDetails.serverUrl}
+      connectOptions={connectOptions}
+      video={props.userChoices.videoEnabled}
+      audio={props.userChoices.audioEnabled}
+      onDisconnected={handleOnLeave}
+      onEncryptionError={handleEncryptionError}
+      onError={handleError}
+      style={{ backgroundColor: '#000' }}
+    >
+      <div
+        style={{
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+        }}
       >
-        {/* <MicBoostOnConnect /> */}
-        <button
-          className="lk-button"
-          onClick={() => setShowQR((prev) => !prev)}
-          style={{
-            position: 'fixed',
-            right: '1.5rem',
-            top: '94%',
-            transform: 'translateY(-50%)',
-            padding: '0.6rem',
-            fontSize: '1.2rem',
-            borderRadius: '50%',
-            zIndex: 1001,
-            backgroundColor: '#222',
-            color: 'white',
-            boxShadow: '0 0 6px rgba(255,255,255,0.1)',
-          }}
-        >
-          📲
-        </button>
-        <div
-          style={{
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-          }}
-        >
-          <CustomTrack
-            showTranscriptions={showTranscriptions}
-            setShowTranscriptions={setShowTranscriptions}
-            language={props.language}
-            selfName={room.localParticipant?.name ?? ''}
-            room={room}
-          />
-        </div>
-        <RecordingIndicator />
-        <RoomAudioRenderer />
-        {showQR && <QRCodeDisplay url={window.location.href} onClose={() => setShowQR(false)} />}
-        <DebugMode logLevel={LogLevel.debug} />
-      </LiveKitRoom>
-    </>
+        <CustomTrack
+          showTranscriptions={showTranscriptions}
+          setShowTranscriptions={setShowTranscriptions}
+          language={props.language}
+          selfName={room.localParticipant?.name ?? ''}
+          room={room}
+        />
+      </div>
+      <RecordingIndicator />
+      <RoomAudioRenderer />
+      {showQR && <QRCodeDisplay url={window.location.href} onClose={() => setShowQR(false)} />}
+      <DebugMode logLevel={LogLevel.debug} />
+    </LiveKitRoom>
   );
 }
 
@@ -360,6 +353,12 @@ function CustomTrack({
     showChat: false,
     unreadMessages: 0,
   });
+
+  const [showLanguageSelector, setShowLanguageSelector] = React.useState(false);
+
+  const handleShowLanguageSelector = useCallback(() => {
+    setShowLanguageSelector(!showLanguageSelector);
+  }, [showLanguageSelector, setShowLanguageSelector]);
 
   const rawTracks = useTracks([Track.Source.Camera, Track.Source.Microphone], {
     onlySubscribed: false,
@@ -397,77 +396,144 @@ function CustomTrack({
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-          border: '#ffffff33 1px solid',
-          borderRadius: '8px',
           position: 'relative',
         }}
       >
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            // borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            // borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-          }}
-        >
-          <ControlBar
-            variation="minimal"
-            style={{ borderTop: 'none' }}
-            controls={{ microphone: true, screenShare: false, camera: true }}
-          />
-          <div style={{ display: 'flex', gap: 4 }}>
-            <LanguageSelector language={language} />
-            <MyKrispSetting />
-            <button
-              className="lk-button"
-              onClick={() => setShowTranscriptions(!showTranscriptions)}
-              style={{
-                padding: '0.5rem 0.5rem',
-                fontSize: '0.95rem',
-                borderRadius: '0.5rem',
-              }}
-            >
-              📝
-            </button>
-          </div>
-        </div>
-
-        <div
-          style={{
             width: '100%',
             height: '100%',
             display: 'grid',
-            gridTemplateColumns: showTranscriptions ? '1fr minmax(140px, 32vh)' : '1fr',
+            gridTemplateColumns: '1fr',
             rowGap: 8,
             minHeight: 0,
             position: 'relative',
           }}
         >
           <div style={{ position: 'relative', minHeight: 0 }}>
-            <GridLayout tracks={tracks}>
-              <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                <CustomParticipantTile
-                  barCount={5}
-                  style={{
-                    border: '#ffffff33 1px solid',
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    top: 0,
-                    left: 0,
-                    zIndex: showTranscriptions ? 1 : 0,
-                  }}
-                  room={room}
-                />
-              </div>
-            </GridLayout>
+            <FocusArea tracks={tracks} room={room} showTranscriptions={showTranscriptions} />
           </div>
 
-          {/* {showTranscriptions && <TranslationBubbles selfName={selfName} />} */}
           {showTranscriptions && <TranslationRealtime selfName={selfName} />}
         </div>
+
+        <LanguageBottomDrawer open={showLanguageSelector} handleOpen={handleShowLanguageSelector} />
+        <CustomControlBar
+          variation="minimal"
+          style={{
+            display: 'flex',
+            width: '100%',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#404040',
+            borderRadius: '20px',
+          }}
+          controls={{ microphone: true, screenShare: false, camera: false, chat: true }}
+          setShowTranscriptions={setShowTranscriptions}
+          showTranscriptions={showTranscriptions}
+          handleShowLanguageSelector={handleShowLanguageSelector}
+          showLanguageSelector={showLanguageSelector}
+        />
       </div>
     </LayoutContextProvider>
+  );
+}
+
+function FocusArea({
+  tracks,
+  room,
+  showTranscriptions,
+}: {
+  tracks: TrackReferenceOrPlaceholder[];
+  room: Room;
+  showTranscriptions: boolean;
+}) {
+  const pinnedTracks = usePinnedTracks();
+  const localPlaceholder = React.useMemo<TrackReferenceOrPlaceholder | undefined>(() => {
+    if (room?.localParticipant) {
+      return { participant: room.localParticipant, source: Track.Source.Camera };
+    }
+    return undefined;
+  }, [room]);
+
+  const focusRef = React.useMemo(
+    () => pinnedTracks[0] ?? tracks[0] ?? localPlaceholder,
+    [pinnedTracks, tracks, localPlaceholder],
+  );
+
+  // Build side list: only non-focused camera tracks
+  const pinnedKeys = React.useMemo(() => {
+    return new Set(pinnedTracks.map((t: any) => `${t?.participant?.sid}|${t?.source}`));
+  }, [pinnedTracks]);
+
+  const isSameRef = React.useCallback(
+    (a?: TrackReferenceOrPlaceholder, b?: TrackReferenceOrPlaceholder) => {
+      if (!a || !b) return false;
+      const ap: any = a as any;
+      const bp: any = b as any;
+      return ap?.participant?.sid === bp?.participant?.sid && ap?.source === bp?.source;
+    },
+    [],
+  );
+
+  const sideTracks = React.useMemo(() => {
+    return tracks
+      .filter((tr) => isTrackReference(tr) && tr.source === Track.Source.Camera)
+      .filter((tr) => {
+        const key = `${tr.participant.sid}|${tr.source}`;
+        if (pinnedKeys.has(key)) return false;
+        if (focusRef && isSameRef(tr, focusRef)) return false;
+        return true;
+      });
+  }, [tracks, pinnedKeys, focusRef, isSameRef]);
+
+  return (
+    <FocusLayoutContainer
+      style={{ position: 'relative', display: 'flex', height: '100%', width: '100%', padding: 0 }}
+    >
+      <CarouselLayout
+        tracks={sideTracks}
+        style={{
+          position: 'absolute',
+          gap: 8,
+          zIndex: 30,
+          bottom: '4px',
+          right: '4px',
+        }}
+      >
+        <CustomParticipantTile
+          room={room}
+          barCount={3}
+          style={{
+            width: 160,
+            height: 90,
+            border: '#ffffff33 1px solid',
+            borderRadius: 8,
+          }}
+        />
+      </CarouselLayout>
+
+      {focusRef ? (
+        <FocusLayout trackRef={focusRef} style={{ height: '100%', width: '100%' }}>
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <CustomParticipantTile
+              barCount={5}
+              style={{
+                border: '#ffffff33 1px solid',
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                top: 0,
+                left: 0,
+                zIndex: showTranscriptions ? 1 : 0,
+              }}
+              room={room}
+            />
+          </div>
+        </FocusLayout>
+      ) : (
+        <div style={{ width: '100%', height: '100%' }} />
+      )}
+    </FocusLayoutContainer>
   );
 }

@@ -172,7 +172,10 @@ export const CustomParticipantTile = React.forwardRef<HTMLDivElement, Participan
                   )}
 
                   {/* --- 4) 메타데이터 영역 --- */}
-                  <div className="lk-participant-metadata">
+                  <div
+                    className="lk-participant-metadata"
+                    style={{ top: '.25rem', bottom: 'auto' }}
+                  >
                     <div className="lk-participant-metadata-item">
                       {showVideo ? (
                         <>

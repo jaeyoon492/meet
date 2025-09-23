@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useMaybeRoomContext } from '@livekit/components-react';
 import { RoomEvent } from 'livekit-client';
-import styles from '../styles/TranslationBubbles.module.css';
+// Tailwind migration: replaced styles/TranslationBubbles.module.css with utility classes
 
 interface Bubble {
   id: string;
@@ -51,7 +51,7 @@ export function TranslationBubbles({ selfName }: { selfName: string }) {
   }, [room]);
 
   return (
-    <div className={styles.bubblesContainer}>
+    <div className="w-full h-full absolute z-30 overflow-y-scroll bg-neutral-900 p-4 border border-white/20 text-[0.95rem] rounded-md mr-2 mb-4 flex flex-col gap-1">
       {bubbles
         .slice(-10)
         .sort((a, b) => b.timestamp - a.timestamp)
@@ -59,15 +59,22 @@ export function TranslationBubbles({ selfName }: { selfName: string }) {
           const isSelf = bubble.from === selfName;
 
           return (
-            <div key={bubble.id} className={isSelf ? styles.bubbleRight : styles.bubbleLeft}>
-              <div className={styles.meta}>
-                <span className={styles.speaker}>{bubble.from}</span>
-                <span className={styles.time}>
+            <div
+              key={bubble.id}
+              className={
+                isSelf
+                  ? 'max-w-[70%] px-3 py-2 rounded-2xl text-white text-[0.95rem] inline-block relative self-end bg-sky-600/70'
+                  : 'max-w-[70%] px-3 py-2 rounded-2xl text-white text-[0.95rem] inline-block relative self-start bg-white/10'
+              }
+            >
+              <div className="text-xs opacity-70 mb-1">
+                <span className="font-bold mr-1">{bubble.from}</span>
+                <span className="ml-1">
                   {new Date(bubble.timestamp * 1000).toLocaleTimeString()}
                 </span>
               </div>
-              <div className={styles.text}>{bubble.text}</div>
-              {<div className={styles.original}>({bubble.original})</div>}
+              <div className="break-words">{bubble.text}</div>
+              {<div className="text-sm opacity-50 mt-1">({bubble.original})</div>}
             </div>
           );
         })}
