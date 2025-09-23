@@ -159,7 +159,7 @@ export const DebugMode = ({ logLevel }: { logLevel?: LogLevel }) => {
               ))}
             </div>
           </details>
-          <details open className={styles.detailsSection}>
+          <details open>
             <summary>
               <b>Permissions</b>
             </summary>
