@@ -30,6 +30,9 @@ export interface Bubble {
   /** 번역문 */
   translation: string;
   translationFinal: boolean;
+
+  /** 번역문 하이라이트 범위(절대 오프셋, [start,end)) */
+  translationHighlights: HighlightRange[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -96,6 +99,75 @@ function extractSegmentId(info: any): string {
 /** 임시 버블 ID 생성(번역이 먼저 왔을 때) */
 function makeTempBubbleId(): string {
   return `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/* ------------------------------ 하이라이트 유틸 ------------------------------ */
+
+export type HighlightRange = { start: number; end: number; label?: string };
+
+/**
+ * text에 대해 ranges([start,end))를 안전하게 적용하여 ReactNode 조각 배열 생성
+ * - 중첩은 서버에서 병합되어 오므로 그대로 분할/래핑
+ * - out-of-bound 범위는 클램프
+ */
+function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNode {
+  if (!text) return null;
+  console.log(text);
+  console.log(ranges);
+  const len = text.length;
+  const rs = Array.isArray(ranges)
+    ? [...ranges]
+        .map((r) => ({ start: Math.max(0, r.start), end: Math.max(0, r.end), label: r.label }))
+        .filter((r) => r.end > r.start && r.start < len)
+        .map((r) => ({ ...r, end: Math.min(len, r.end) }))
+        .sort((a, b) => a.start - b.start || a.end - b.end)
+    : [];
+  console.log(rs);
+  if (rs.length === 0) return text;
+
+  const out: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const r of rs) {
+    if (cursor < r.start) {
+      out.push(text.slice(cursor, r.start));
+    }
+    const cls = `hl ${r.label ? r.label : 'keyword'}`;
+    out.push(
+      <span className={cls} key={`${r.start}:${r.end}:${r.label ?? 'k'}`}>
+        {text.slice(r.start, r.end)}
+      </span>,
+    );
+    cursor = r.end;
+  }
+  if (cursor < len) out.push(text.slice(cursor));
+  // 렌더 안전장치: 계산된 조각이 비어있으면 원문 반환
+  if (out.length === 0) return text;
+  return <>{out}</>;
+}
+
+/** ranges 병합/중복 제거(겹침 없음이 보장되지만 중복 항목은 제거) */
+function mergeRanges(prev: HighlightRange[], next: HighlightRange[]): HighlightRange[] {
+  if (!prev?.length) return [...next];
+  if (!next?.length) return [...prev];
+  const seen = new Set<string>();
+  const merged = [...prev, ...next]
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .filter((r) => {
+      const key = `${r.start}:${r.end}:${r.label ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return merged;
+}
+
+/** offset_base 위치에 chunk를 교체 삽입(append 호환) */
+function applyChunkAtOffset(buf: string, chunk: string, offsetBase: number): string {
+  const offset = Math.max(0, Math.min(offsetBase ?? buf.length, buf.length));
+  const before = buf.slice(0, offset);
+  const afterStart = offset + chunk.length;
+  const after = buf.length > afterStart ? buf.slice(afterStart) : '';
+  return before + chunk + after;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -176,8 +248,10 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
         transcriptFinal: Boolean(data.original),
         translation: '',
         translationFinal: false,
+        translationHighlights: [],
       };
       const bubble = ensureBubble(bubbleId, seed);
+      console.log(bubble);
 
       // 5) 번역 병합/상태 갱신
       if (data.type === 'translation_error') {
@@ -188,24 +262,55 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
 
       if (data.type === 'translation_live') {
         const piece = String(data.text ?? '');
-        // 간단한 중복 필터(같은 조각 연속 수신 차단)
-        if (lastTranslationPieceById.current.get(bubbleId) === piece) return;
-        lastTranslationPieceById.current.set(bubbleId, piece);
+        const offsetBase = Number.isFinite(data.offset_base)
+          ? Number(data.offset_base)
+          : bubble.translation.length;
 
-        const merged = mergeIncrementalText(bubble.translation, piece);
-        if (merged !== bubble.translation || bubble.translationFinal !== false) {
-          setBubble(bubbleId, { ...bubble, translation: merged, translationFinal: false });
-        }
+        // 중복 필터(텍스트+오프셋)
+        const dedupKey = `${offsetBase}:${piece}`;
+        if (lastTranslationPieceById.current.get(bubbleId) === dedupKey) return;
+        lastTranslationPieceById.current.set(bubbleId, dedupKey);
+
+        // 버퍼 업데이트(append/replace 호환)
+        const updatedText = applyChunkAtOffset(bubble.translation, piece, offsetBase);
+
+        // 하이라이트 절대 오프셋 계산 후 누적
+        const incRanges: HighlightRange[] = Array.isArray(data.highlights)
+          ? data.highlights.map((r: any) => ({
+              start: offsetBase + Number(r.start ?? 0),
+              end: offsetBase + Number(r.end ?? 0),
+              label: r.label,
+            }))
+          : [];
+        const mergedRanges = mergeRanges(bubble.translationHighlights ?? [], incRanges);
+
+        setBubble(bubbleId, {
+          ...bubble,
+          translation: updatedText,
+          translationFinal: false,
+          translationHighlights: mergedRanges,
+        });
       } else {
-        // translation_final 또는 legacy translation (최종)
-        let nextTranslation = bubble.translation;
-        if (data.text) {
-          nextTranslation = mergeIncrementalText(nextTranslation, String(data.text));
-        }
+        // translation_final: 최종 텍스트/하이라이트로 재렌더
+        const finalText =
+          typeof data.final_text === 'string'
+            ? data.final_text
+            : typeof data.text === 'string'
+            ? data.text
+            : bubble.translation;
+        const finalRanges: HighlightRange[] = Array.isArray(data.highlights)
+          ? data.highlights.map((r: any) => ({
+              start: Number(r.start ?? 0),
+              end: Number(r.end ?? 0),
+              label: r.label,
+            }))
+          : [];
+
         const next: Bubble = {
           ...bubble,
-          translation: nextTranslation,
+          translation: finalText,
           translationFinal: true,
+          translationHighlights: finalRanges,
         };
         if (data.original) {
           next.transcript = String(data.original);
@@ -257,6 +362,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
             transcriptFinal: false,
             translation: '',
             translationFinal: false,
+            translationHighlights: [],
           });
         }
       }
@@ -329,8 +435,12 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
               </div>
 
               {/* 윗줄: 번역 (번역 중이면 placeholder) */}
-              <div className="break-words">
-                {showTranslatingPlaceholder ? '(translating...)' : b.translation}
+              <div className="break-words whitespace-pre-wrap">
+                {showTranslatingPlaceholder
+                  ? '(translating...)'
+                  : (b.translationHighlights && b.translationHighlights.length > 0
+                      ? applyHighlights(b.translation, b.translationHighlights)
+                      : b.translation)}
               </div>
 
               {/* 아랫줄: 전사(원문) */}
