@@ -189,6 +189,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
       if (data.type === 'translation_live') {
         const piece = String(data.text ?? '');
         // 간단한 중복 필터(같은 조각 연속 수신 차단)
+        console.log('piece', piece);
         if (lastTranslationPieceById.current.get(bubbleId) === piece) return;
         lastTranslationPieceById.current.set(bubbleId, piece);
 
@@ -196,6 +197,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
         if (merged !== bubble.translation || bubble.translationFinal !== false) {
           setBubble(bubbleId, { ...bubble, translation: merged, translationFinal: false });
         }
+        console.log('merge', merged);
       } else {
         // translation_final 또는 legacy translation (최종)
         let nextTranslation = bubble.translation;
