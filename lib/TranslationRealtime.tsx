@@ -312,6 +312,10 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           const isSelfUser = b.fromName === selfName && b.role === 'user';
           const sideClass = isSelfUser ? styles.bubbleRight : styles.bubbleLeft;
 
+          console.log('b.translationFinal', b.translationFinal);
+          console.log('b.transcript', b.transcript);
+          console.log('b.translation.length', b.translation.length);
+
           const showTranslatingPlaceholder =
             !b.translationFinal && !!b.transcript && b.translation.length === 0;
 
