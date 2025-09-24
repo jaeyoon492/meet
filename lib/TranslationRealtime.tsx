@@ -145,6 +145,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
       topic?: string,
     ) => {
       // 1) 번역 토픽만 처리
+      console.log('topic', topic);
       if (topic !== 'translation_stream') return;
 
       const data = safeParseJSON(payload);
