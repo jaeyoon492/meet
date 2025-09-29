@@ -7,7 +7,7 @@ export type Message = {
 
 export type HistoryResponse = { messages: Message[] } | Message[];
 
-const BASE = process.env.NEXT_PUBLIC_CHAT_API_BASE;
+const BASE = process.env.NEXT_PUBLIC_API_BASE;
 
 export async function fetchChatHistory(
   roomName: string,

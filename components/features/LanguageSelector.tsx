@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMaybeRoomContext, useParticipantInfo } from '@livekit/components-react';
-import { LANGUAGE_OPTIONS } from './constants';
+import { LANGUAGE_OPTIONS } from '@/lib/constants';
 
 export function LanguageSelector(prop: { language: string }) {
   const room = useMaybeRoomContext();

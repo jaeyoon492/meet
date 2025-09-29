@@ -1,7 +1,7 @@
 'use client';
 
 import { decodePassphrase, randomString } from '@/lib/client-utils';
-import { RecordingIndicator } from '@/lib/RecordingIndicator';
+import { RecordingIndicator } from '@/components/features/RecordingIndicator';
 import { ConnectionDetails } from '@/lib/types';
 import {
   LiveKitRoom,
@@ -33,13 +33,13 @@ import {
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useState } from 'react';
 import type { WidgetState, TrackReferenceOrPlaceholder } from '@livekit/components-core';
-import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
-import { QRCodeDisplay } from '@/lib/QRCodeDisplay';
-import { DebugMode } from '@/lib/Debug';
-import { Overlay } from '@/lib/Overlay';
-import TranslationRealtime from '@/lib/TranslationRealtime';
-import { CustomControlBar } from '@/lib/CustomControlBar';
-import { LanguageBottomDrawer } from '@/lib/Language';
+import { CustomParticipantTile } from '@/components/features/CustomParticipantTile';
+import { QRCodeDisplay } from '@/components/features/QRCodeDisplay';
+import { DebugMode } from '@/components/features/Debug';
+import { Overlay } from '@/components/features/Overlay';
+import TranslationRealtime from '@/components/features/TranslationRealtime';
+import { CustomControlBar } from '@/components/features/CustomControlBar';
+import { LanguageBottomDrawer } from '@/components/features/Language';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
