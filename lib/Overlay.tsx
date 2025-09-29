@@ -26,14 +26,12 @@ export function Overlay({
     const vid = getVideoEl();
     if (!cvs || !vid || !vid.videoWidth || !vid.videoHeight) return;
     const dpr = window.devicePixelRatio || 1;
-    cvs.width = Math.round(cvs.clientWidth * dpr);
-    cvs.height = Math.round(cvs.clientHeight * dpr);
-
     const rect = cvs.getBoundingClientRect();
+    // 논리 픽셀 기준 크기 설정 후 스케일 적용
     cvs.width = Math.round(rect.width * dpr);
     cvs.height = Math.round(rect.height * dpr);
-    const ctx = cvs.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const ctx = cvs.getContext('2d');
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
 
   // object-fit: contain 레터박스 보정

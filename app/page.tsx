@@ -1,13 +1,12 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import React, { Suspense, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
 import { encodePassphrase, generateRoomId, randomString } from '@/lib/client-utils';
-import Image from 'next/image';
 import JusticeLogo from '@/components/ui/JusticeLogo';
 import JusticeTextLogo from '@/components/ui/JusticeTextLogo';
 import OfuFooterLogo from '@/components/ui/OfuFooterLogo';
-import ArrowRightIcon from '@/components/ui/ArrowRightcon';
+import ArrowRightIcon from '@/components/ui/ArrowRightIcon';
 
 function DemoMeeting(props: {}) {
   const router = useRouter();

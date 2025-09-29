@@ -11,11 +11,34 @@ export function generateRoomId(): string {
 }
 
 export function randomString(length: number): string {
-  let result = '';
-  const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  const charactersLength = characters.length;
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const n = alphabet.length;
+
+  // 우선 Web Crypto 사용 (브라우저/Node18+ 지원)
+  const webCrypto: Crypto | undefined =
+    typeof globalThis !== 'undefined' && (globalThis as any).crypto
+      ? (globalThis as any).crypto
+      : undefined;
+
+  if (webCrypto && typeof (webCrypto as any).getRandomValues === 'function') {
+    const out: string[] = new Array(length);
+    const bytes = new Uint8Array(length);
+    (webCrypto as any).getRandomValues(bytes);
+    for (let i = 0; i < length; i++) out[i] = alphabet[bytes[i] % n];
+    return out.join('');
   }
-  return result;
+
+  // 폴백: Node crypto 또는 Math.random (마지막 수단)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodeCrypto = require('crypto');
+    const bytes: Buffer = nodeCrypto.randomBytes(length);
+    let s = '';
+    for (let i = 0; i < length; i++) s += alphabet[bytes[i] % n];
+    return s;
+  } catch {
+    let s = '';
+    for (let i = 0; i < length; i++) s += alphabet[Math.floor(Math.random() * n)];
+    return s;
+  }
 }

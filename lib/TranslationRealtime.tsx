@@ -112,8 +112,6 @@ export type HighlightRange = { start: number; end: number; label?: string };
  */
 function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNode {
   if (!text) return null;
-  console.log(text);
-  console.log(ranges);
   const len = text.length;
   const rs = Array.isArray(ranges)
     ? [...ranges]
@@ -122,7 +120,6 @@ function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNo
         .map((r) => ({ ...r, end: Math.min(len, r.end) }))
         .sort((a, b) => a.start - b.start || a.end - b.end)
     : [];
-  console.log(rs);
   if (rs.length === 0) return text;
 
   const out: React.ReactNode[] = [];
@@ -251,7 +248,6 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
         translationHighlights: [],
       };
       const bubble = ensureBubble(bubbleId, seed);
-      console.log(bubble);
 
       // 5) 번역 병합/상태 갱신
       if (data.type === 'translation_error') {

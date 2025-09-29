@@ -4,7 +4,6 @@ import { supportsScreenSharing } from '@livekit/components-core';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-core';
 import {
   DisconnectButton,
-  StartMediaButton,
   TrackToggle,
   useLocalParticipantPermissions,
   useLocalParticipant,
@@ -134,9 +133,7 @@ export function CustomControlBar({
   );
   const { isMuted: isMicMuted } = useTrackMutedIndicator(micTrackRef);
 
-  React.useEffect(() => {
-    console.log(userChoices.audioEnabled);
-  }, [userChoices.audioEnabled]);
+  // 마이크 토글 상태는 useTrackMutedIndicator로 동기화되어 별도 로그 필요 없음
 
   return (
     <div {...htmlProps}>

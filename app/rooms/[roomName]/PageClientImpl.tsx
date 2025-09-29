@@ -32,21 +32,12 @@ import {
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useState } from 'react';
-import type {
-  ReceivedTranscriptionSegment,
-  WidgetState,
-  TrackReferenceOrPlaceholder,
-} from '@livekit/components-core';
-import { LANGUAGE_OPTIONS } from '@/lib/constants';
+import type { WidgetState, TrackReferenceOrPlaceholder } from '@livekit/components-core';
 import { CustomParticipantTile } from '@/lib/CustomParticipantTile';
-import { LanguageSelector } from '@/lib/LanguageSelector';
-import { TranslationBubbles } from '@/lib/TranslationBubbles';
 import { QRCodeDisplay } from '@/lib/QRCodeDisplay';
 import { DebugMode } from '@/lib/Debug';
-import MyKrispSetting from '@/lib/MyKrispSetting';
 import { Overlay } from '@/lib/Overlay';
 import TranslationRealtime from '@/lib/TranslationRealtime';
-import { MicBoostOnConnect } from '@/lib/MicBoostOnConnect';
 import { CustomControlBar } from '@/lib/CustomControlBar';
 import { LanguageBottomDrawer } from '@/lib/Language';
 
@@ -146,7 +137,6 @@ function VideoConferenceComponent(props: {
   const e2eeEnabled = !!(e2eePassphrase && worker);
   const keyProvider = new ExternalE2EEKeyProvider();
   const [e2eeSetupComplete, setE2eeSetupComplete] = React.useState(false);
-  console.log('Connection Datail', props.connectionDetails);
 
   const roomOptions = React.useMemo((): RoomOptions => {
     let videoCodec: VideoCodec | undefined = props.options.codec ? props.options.codec : 'vp9';
@@ -178,14 +168,14 @@ function VideoConferenceComponent(props: {
           }
         : undefined,
     };
-  }, [props.userChoices, props.options.hq, props.options.codec]);
+  }, [props.userChoices, props.options.hq, props.options.codec, e2eeEnabled]);
 
   const room = React.useMemo(() => new Room(roomOptions), []);
 
   React.useEffect(() => {
     if (e2eeEnabled) {
       keyProvider
-        .setKey(decodePassphrase(e2eePassphrase))
+        .setKey(e2eePassphrase as string)
         .then(() => {
           room.setE2EEEnabled(true).catch((e) => {
             if (e instanceof DeviceUnsupportedError) {
@@ -238,9 +228,6 @@ function VideoConferenceComponent(props: {
       if (publication.kind === 'audio' && publication.trackName === 'translated') {
         const isFromSelf = publisherIdentity === room.localParticipant.identity;
         const isAgentToSelf = publisherIdentity.endsWith(`-to-${room.localParticipant.identity}`);
-        console.log(
-          `[trackPublished] publisher: ${publisherIdentity}, self: ${room.localParticipant.identity}`,
-        );
         publication.setSubscribed(isAgentToSelf && !isFromSelf); // 상대방 트랙만 구독
       }
     };
