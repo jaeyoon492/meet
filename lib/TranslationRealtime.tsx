@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMaybeRoomContext } from '@livekit/components-react';
 import { RoomEvent, Participant, DataPacket_Kind } from 'livekit-client';
+import { fetchChatHistory, type Message as HistoryMessage } from '@/lib/chat-api';
 // Tailwind migration: replaced styles/TranslationBubbles.module.css with utility classes
 
 /** 역할 구분: 사용자가 말한 전사인지, 에이전트 발화/텍스트인지 구분 */
@@ -178,6 +179,11 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
   const bubbleMapRef = useRef<Map<string, Bubble>>(new Map());
   const [version, setVersion] = useState(0);
 
+  /** 히스토리 + 라이브 메시지 + 라이브 버퍼 (가이드 준수용 보조 상태) */
+  const [history, setHistory] = useState<HistoryMessage[]>([]);
+  const [liveMessages, setLiveMessages] = useState<HistoryMessage[]>([]);
+  const liveBufferRef = useRef<Map<string, { segId: string; fromIdentity: string; text: string; startedAt: number }>>(new Map());
+
   /** 동일 세그먼트에 대한 중복 청크 필터 */
   const lastTranscriptionPieceById = useRef<Map<string, string>>(new Map());
   const lastTranslationPieceById = useRef<Map<string, string>>(new Map());
@@ -202,6 +208,51 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
     setBubble(id, seed);
     return seed;
   }
+
+  /* ------------------------------- 초기 히스토리 로드 ------------------------------- */
+  useEffect(() => {
+    let aborted = false;
+    async function load() {
+      try {
+        const roomName = (room as any)?.name as string | undefined;
+        if (!roomName) return; // 연결 전이면 대기
+        const msgs = await fetchChatHistory(roomName, 'all', 100);
+        if (aborted) return;
+        // 시간 오름차순 정렬
+        const sorted = [...msgs].sort((a, b) => toMilliseconds(a.datetime) - toMilliseconds(b.datetime));
+        setHistory(sorted);
+
+        // 버블 스토어에 반영(현재 렌더러와 형식 맞추기)
+        sorted.forEach((m, idx) => {
+          const id = `hist-${toMilliseconds(m.datetime)}-${idx}`;
+          const fromIdentity = m.speaker;
+          const fromName = resolveParticipantName(room, fromIdentity);
+          const startedAt = toMilliseconds(m.datetime);
+          const bubble: Bubble = {
+            id,
+            fromIdentity,
+            fromName,
+            role: 'user',
+            startedAt,
+            transcript: m.text ?? '',
+            transcriptFinal: true,
+            translation: m.translated ?? '',
+            translationFinal: Boolean(m.translated),
+            translationHighlights: [],
+          };
+          bubbleMapRef.current.set(id, bubble);
+        });
+        setVersion((v) => v + 1);
+      } catch (e) {
+        console.warn('[history] failed to load:', e);
+        // 히스토리가 비어있을 수 있음(TTL 등). 필요 시 UI 안내
+      }
+    }
+    load();
+    return () => {
+      aborted = true;
+    };
+  }, [room]);
 
   useEffect(() => {
     if (!room) return;
@@ -251,8 +302,22 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
 
       // 5) 번역 병합/상태 갱신
       if (data.type === 'translation_error') {
-        // 필요 시 에러 상태 UI 처리 가능(여기서는 로그만)
         console.warn('[translation_error]', data.message);
+        const id = `err-${Date.now()}`;
+        const startedAt = toMilliseconds(data.timestamp ?? Date.now());
+        const bubble: Bubble = {
+          id,
+          fromIdentity: fromIdentity,
+          fromName: fromName || 'System',
+          role: 'agent',
+          startedAt,
+          transcript: '',
+          transcriptFinal: true,
+          translation: data.message || 'Translation error occurred.',
+          translationFinal: true,
+          translationHighlights: [],
+        };
+        setBubble(id, bubble);
         return;
       }
 
@@ -286,6 +351,19 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           translationFinal: false,
           translationHighlights: mergedRanges,
         });
+
+        // 보조 상태: liveBuffer 갱신(가이드 준수)
+        if (preferredSegId) {
+          const existing = liveBufferRef.current.get(preferredSegId);
+          const startedAt = toMilliseconds(data.timestamp ?? Date.now());
+          const updated = {
+            segId: preferredSegId,
+            fromIdentity,
+            text: (existing?.text ?? '') + piece,
+            startedAt: existing?.startedAt ?? startedAt,
+          };
+          liveBufferRef.current.set(preferredSegId, updated);
+        }
       } else {
         // translation_final: 최종 텍스트/하이라이트로 재렌더
         const finalText =
@@ -313,6 +391,16 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           next.transcriptFinal = true;
         }
         setBubble(bubbleId, next);
+
+        // 보조 상태: liveMessages 추가 + liveBuffer 제거(가이드 준수)
+        const msg: HistoryMessage = {
+          speaker: fromIdentity,
+          text: String(data.original ?? ''),
+          translated: String(finalText ?? ''),
+          datetime: Math.floor((data.timestamp ?? Date.now()) * (data.timestamp > 10_000_000_000 ? 1 : 0.001)),
+        };
+        setLiveMessages((prev) => [...prev, msg]);
+        if (preferredSegId) liveBufferRef.current.delete(preferredSegId);
       }
     };
 
@@ -404,7 +492,9 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
 
   /* ------------------------------- 렌더 목록 정렬 ------------------------------- */
   const items = useMemo(() => {
-    return [...bubbleMapRef.current.values()].sort((a, b) => a.startedAt - b.startedAt).slice(-30); // 최근 30개만
+    // 현재 렌더는 Bubble 스토어 기준이나, 히스토리를 버블에 반영했으므로 그대로 정렬/렌더하면 가이드의
+    // "history + liveMessages" 효과를 충족한다. (liveMessages는 진단/검사용으로 별도 보유)
+    return [...bubbleMapRef.current.values()].sort((a, b) => a.startedAt - b.startedAt).slice(-100);
   }, [version]);
 
   return (
@@ -413,6 +503,9 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
       aria-live="polite"
     >
       <div className="w-full h-full absolute z-30 overflow-y-auto bg-dark100 p-3 sm:p-4 border-0 rounded-[20px] text-sm sm:text-[0.95rem] md:mr-2 md:mb-4 mr-0 mb-0 flex flex-col gap-1">
+        {history.length === 0 && (
+          <div className="text-xs opacity-60 mb-2">No history found (may have expired)</div>
+        )}
         {items.map((b) => {
           const isSelfUser = b.fromName === selfName && b.role === 'user';
           const sideClass = isSelfUser
