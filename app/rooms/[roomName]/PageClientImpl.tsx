@@ -52,7 +52,6 @@ import { LanguageBottomDrawer } from '@/lib/Language';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
-const SHOW_SETTINGS_MENU = process.env.NEXT_PUBLIC_SHOW_SETTINGS_MENU == 'true';
 
 export function PageClientImpl(props: {
   roomName: string;
@@ -388,7 +387,11 @@ function CustomTrack({
           {showTranscriptions && <TranslationRealtime selfName={selfName} />}
         </div>
 
-        <LanguageBottomDrawer open={showLanguageSelector} handleOpen={handleShowLanguageSelector} />
+        <LanguageBottomDrawer
+          initialLanguage={language}
+          open={showLanguageSelector}
+          handleOpen={handleShowLanguageSelector}
+        />
         <CustomControlBar
           variation="minimal"
           style={{

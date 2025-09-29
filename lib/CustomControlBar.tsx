@@ -1,13 +1,16 @@
 import { Track } from 'livekit-client';
 import * as React from 'react';
 import { supportsScreenSharing } from '@livekit/components-core';
+import type { TrackReferenceOrPlaceholder } from '@livekit/components-core';
 import {
   DisconnectButton,
   StartMediaButton,
   TrackToggle,
   useLocalParticipantPermissions,
+  useLocalParticipant,
   useMaybeLayoutContext,
   usePersistentUserChoices,
+  useTrackMutedIndicator,
 } from '@livekit/components-react';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { mergeProps } from '@/utils/utils';
@@ -120,6 +123,21 @@ export function CustomControlBar({
     [saveVideoInputEnabled],
   );
 
+  // 실제 로컬 마이크 트랙의 mute 상태를 구해 아이콘과 동기화
+  const { localParticipant } = useLocalParticipant();
+  const micTrackRef = React.useMemo<TrackReferenceOrPlaceholder | undefined>(
+    () =>
+      localParticipant
+        ? { participant: localParticipant, source: Track.Source.Microphone }
+        : undefined,
+    [localParticipant],
+  );
+  const { isMuted: isMicMuted } = useTrackMutedIndicator(micTrackRef);
+
+  React.useEffect(() => {
+    console.log(userChoices.audioEnabled);
+  }, [userChoices.audioEnabled]);
+
   return (
     <div {...htmlProps}>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -130,7 +148,7 @@ export function CustomControlBar({
           onDeviceError={(error) => onDeviceError?.({ source: Track.Source.Microphone, error })}
           style={{ backgroundColor: '#404040', border: 'none', padding: '0px 16px' }}
         >
-          {userChoices.audioEnabled ? <MicMuteIcon /> : <MicIcon />}
+          {isMicMuted ? <MicMuteIcon /> : <MicIcon />}
         </TrackToggle>
 
         <button

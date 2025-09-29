@@ -27,7 +27,7 @@ const ChatCloseIcon = (props: SVGProps<SVGSVGElement>) => (
       <path
         d="M4.5 26V5.33333C4.5 4.6 5.1 4 5.83333 4H27.1667C27.9 4 28.5 4.6 28.5 5.33333V21.3333C28.5 22.0667 27.9 22.6667 27.1667 22.6667H7.83333L4.5 26Z"
         fill="white"
-        fill-opacity="0.3"
+        fillOpacity="0.3"
         stroke="white"
         stroke-width="2"
         stroke-linecap="round"
