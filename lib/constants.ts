@@ -5,4 +5,5 @@ export const LANGUAGE_OPTIONS = [
   { code: 'zh', label: 'Chinese' },
   { code: 'es', label: 'Spanish' },
   { code: 'th', label: 'Thai' },
+  { code: 'vi', label: 'Vietnamese' },
 ];

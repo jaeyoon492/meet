@@ -255,41 +255,43 @@ function VideoConferenceComponent(props: {
   }, [room]);
 
   return (
-    <LiveKitRoom
-      connect={e2eeSetupComplete}
-      room={room}
-      token={props.connectionDetails.participantToken}
-      serverUrl={props.connectionDetails.serverUrl}
-      connectOptions={connectOptions}
-      video={props.userChoices.videoEnabled}
-      audio={props.userChoices.audioEnabled}
-      onDisconnected={handleOnLeave}
-      onEncryptionError={handleEncryptionError}
-      onError={handleError}
-      style={{ backgroundColor: '#000' }}
-    >
-      <div
-        style={{
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-        }}
+    <>
+      <LiveKitRoom
+        connect={e2eeSetupComplete}
+        room={room}
+        token={props.connectionDetails.participantToken}
+        serverUrl={props.connectionDetails.serverUrl}
+        connectOptions={connectOptions}
+        video={props.userChoices.videoEnabled}
+        audio={props.userChoices.audioEnabled}
+        onDisconnected={handleOnLeave}
+        onEncryptionError={handleEncryptionError}
+        onError={handleError}
+        style={{ backgroundColor: '#000' }}
       >
-        <CustomTrack
-          showTranscriptions={showTranscriptions}
-          setShowTranscriptions={setShowTranscriptions}
-          language={props.language}
-          selfName={room.localParticipant?.name ?? ''}
-          room={room}
-        />
-      </div>
-      <RecordingIndicator />
-      <RoomAudioRenderer />
-      {showQR && <QRCodeDisplay url={window.location.href} onClose={() => setShowQR(false)} />}
-      <DebugMode logLevel={LogLevel.debug} />
-    </LiveKitRoom>
+        <div
+          style={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <CustomTrack
+            showTranscriptions={showTranscriptions}
+            setShowTranscriptions={setShowTranscriptions}
+            language={props.language}
+            selfName={room.localParticipant?.name ?? ''}
+            room={room}
+          />
+        </div>
+        <RecordingIndicator />
+        <RoomAudioRenderer />
+        {showQR && <QRCodeDisplay url={window.location.href} onClose={() => setShowQR(false)} />}
+        <DebugMode logLevel={LogLevel.debug} />
+      </LiveKitRoom>
+    </>
   );
 }
 
