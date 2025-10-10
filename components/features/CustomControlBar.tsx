@@ -19,6 +19,9 @@ import MicIcon from '@/components/ui/MicIcon';
 import MicMuteIcon from '@/components/ui/MicMuteIcon';
 import LanguageIcon from '@/components/ui/LanguageIcon';
 import LeaveIcon from '@/components/ui/LeaveIcon';
+import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
+import NoiseFilterDisabledIcon from '../ui/NoiseFilterDisabledIcon';
+import NoiseFilterEnabledIcon from '../ui/NoiseFilterEnabledIcon';
 
 /** @public */
 export type ControlBarControls = {
@@ -68,6 +71,12 @@ export function CustomControlBar({
   const visibleControls = { leave: true, ...controls };
 
   const localPermissions = useLocalParticipantPermissions();
+  const krisp = useKrispNoiseFilter();
+
+  const handleNoiseFilter = React.useCallback(() => {
+    const isNoiseFilterEnabled = krisp.isNoiseFilterEnabled;
+    krisp.setNoiseFilterEnabled(!isNoiseFilterEnabled);
+  }, [krisp.isNoiseFilterEnabled, krisp.isNoiseFilterEnabled]);
 
   if (!localPermissions) {
     visibleControls.camera = false;
@@ -162,6 +171,14 @@ export function CustomControlBar({
           onClick={handleShowLanguageSelector}
         >
           <LanguageIcon />
+        </button>
+
+        <button
+          className="lk-button"
+          style={{ backgroundColor: '#404040', border: 'none', padding: '0px 16px' }}
+          onClick={handleNoiseFilter}
+        >
+          {krisp.isNoiseFilterEnabled ? <NoiseFilterDisabledIcon /> : <NoiseFilterEnabledIcon />}
         </button>
       </div>
 

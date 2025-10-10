@@ -40,6 +40,8 @@ import { Overlay } from '@/components/features/Overlay';
 import TranslationRealtime from '@/components/features/TranslationRealtime';
 import { CustomControlBar } from '@/components/features/CustomControlBar';
 import { LanguageBottomDrawer } from '@/components/features/Language';
+import MyKrispSetting from '@/components/features/MyKrispSetting';
+import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
 
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';

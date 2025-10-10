@@ -79,24 +79,6 @@ function mergeIncrementalText(previous: string, incoming: string): string {
   return previous + incoming; // 완전히 별개 조각인 드문 경우
 }
 
-/** 전사 스트림 chunk 표준화 */
-function normalizeStreamChunk(chunk: any): string {
-  if (typeof chunk === 'string') return chunk;
-  if (typeof chunk?.current === 'string') return chunk.current;
-  return String(chunk ?? '');
-}
-
-/** 전사 스트림(info)에서 세그먼트 ID를 최대한 안전하게 추출 */
-function extractSegmentId(info: any): string {
-  const attrs = (info?.attributes ?? {}) as Record<string, any>;
-  return (
-    attrs['lk.segment_id'] ||
-    attrs['segment_id'] ||
-    info?.id || // 엔진/런타임이 부여한 스트림 id
-    `seg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  );
-}
-
 /** 임시 버블 ID 생성(번역이 먼저 왔을 때) */
 function makeTempBubbleId(): string {
   return `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -182,17 +164,10 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
   /** 히스토리 + 라이브 메시지 + 라이브 버퍼 (가이드 준수용 보조 상태) */
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [liveMessages, setLiveMessages] = useState<HistoryMessage[]>([]);
-  const liveBufferRef = useRef<Map<string, { segId: string; fromIdentity: string; text: string; startedAt: number }>>(new Map());
 
   /** 동일 세그먼트에 대한 중복 청크 필터 */
   const lastTranscriptionPieceById = useRef<Map<string, string>>(new Map());
   const lastTranslationPieceById = useRef<Map<string, string>>(new Map());
-
-  /** 화자별 “열린 버블”(최근 생성된 세그먼트). seg_id 없는 번역이 붙을 자리 */
-  const currentOpenBubbleIdBySpeaker = useRef<Map<string, string>>(new Map());
-
-  /** 번역이 먼저 오고 전사가 나중에 오는 경우, 입양 대기 중인 임시 버블 ID */
-  const pendingTempBubbleIdBySpeaker = useRef<Map<string, string>>(new Map());
 
   /** 업서트 도우미들 */
   function setBubble(id: string, next: Bubble) {
@@ -219,7 +194,9 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
         const msgs = await fetchChatHistory(roomName, 'all', 100);
         if (aborted) return;
         // 시간 오름차순 정렬
-        const sorted = [...msgs].sort((a, b) => toMilliseconds(a.datetime) - toMilliseconds(b.datetime));
+        const sorted = [...msgs].sort(
+          (a, b) => toMilliseconds(a.datetime) - toMilliseconds(b.datetime),
+        );
         setHistory(sorted);
 
         // 버블 스토어에 반영(현재 렌더러와 형식 맞추기)
@@ -257,41 +234,17 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
   useEffect(() => {
     if (!room) return;
 
-    /* ----------------------------- 번역 수신 핸들러 ----------------------------- */
-    const onData = (
-      payload: Uint8Array,
-      participant?: Participant,
-      kind?: DataPacket_Kind,
-      topic?: string,
-    ) => {
-      // 1) 번역 토픽만 처리
-      if (topic !== 'translation_stream') return;
+    const handleTranslationData = (data: any, fromIdentity: string, fromName: string) => {
+      console.log('Translation_Data: ', data);
+      const bubbleId: string = data.seg_id || makeTempBubbleId();
+      const startedAt = toMilliseconds(data.timestamp ?? Date.now());
 
-      const data = safeParseJSON(payload);
-      if (
-        !data ||
-        !['translation_live', 'translation_final', 'translation_error'].includes(data.type)
-      ) {
-        return;
-      }
-
-      // 2) 화자 식별
-      const fromIdentity: string =
-        data.fromIdentity || participant?.identity || room.localParticipant.identity;
-      const fromName = data.from || resolveParticipantName(room, fromIdentity);
-
-      // 3) 세그먼트 ID 결정: 백엔드가 seg_id를 못 붙인 경우 열린 버블로 폴백
-      const preferredSegId: string | undefined = data.seg_id;
-      const fallbackOpenSegId = currentOpenBubbleIdBySpeaker.current.get(fromIdentity);
-      const bubbleId = preferredSegId || fallbackOpenSegId || makeTempBubbleId();
-
-      // 4) 버블 존재 보장 (번역이 먼저 오면 임시 버블로 만든다)
       const seed: Bubble = {
         id: bubbleId,
         fromIdentity,
         fromName,
-        role: 'user', // 번역은 보통 user 발화의 결과를 의미
-        startedAt: Date.now(),
+        role: 'user',
+        startedAt,
         transcript: data.original || '',
         transcriptFinal: Boolean(data.original),
         translation: '',
@@ -300,14 +253,12 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
       };
       const bubble = ensureBubble(bubbleId, seed);
 
-      // 5) 번역 병합/상태 갱신
       if (data.type === 'translation_error') {
         console.warn('[translation_error]', data.message);
         const id = `err-${Date.now()}`;
-        const startedAt = toMilliseconds(data.timestamp ?? Date.now());
-        const bubble: Bubble = {
+        const errorBubble: Bubble = {
           id,
-          fromIdentity: fromIdentity,
+          fromIdentity,
           fromName: fromName || 'System',
           role: 'agent',
           startedAt,
@@ -317,7 +268,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           translationFinal: true,
           translationHighlights: [],
         };
-        setBubble(id, bubble);
+        setBubble(id, errorBubble);
         return;
       }
 
@@ -327,15 +278,12 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           ? Number(data.offset_base)
           : bubble.translation.length;
 
-        // 중복 필터(텍스트+오프셋)
         const dedupKey = `${offsetBase}:${piece}`;
         if (lastTranslationPieceById.current.get(bubbleId) === dedupKey) return;
         lastTranslationPieceById.current.set(bubbleId, dedupKey);
 
-        // 버퍼 업데이트(append/replace 호환)
         const updatedText = applyChunkAtOffset(bubble.translation, piece, offsetBase);
 
-        // 하이라이트 절대 오프셋 계산 후 누적
         const incRanges: HighlightRange[] = Array.isArray(data.highlights)
           ? data.highlights.map((r: any) => ({
               start: offsetBase + Number(r.start ?? 0),
@@ -350,143 +298,127 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           translation: updatedText,
           translationFinal: false,
           translationHighlights: mergedRanges,
+          startedAt: Math.min(bubble.startedAt, startedAt),
         });
-
-        // 보조 상태: liveBuffer 갱신(가이드 준수)
-        if (preferredSegId) {
-          const existing = liveBufferRef.current.get(preferredSegId);
-          const startedAt = toMilliseconds(data.timestamp ?? Date.now());
-          const updated = {
-            segId: preferredSegId,
-            fromIdentity,
-            text: (existing?.text ?? '') + piece,
-            startedAt: existing?.startedAt ?? startedAt,
-          };
-          liveBufferRef.current.set(preferredSegId, updated);
-        }
-      } else {
-        // translation_final: 최종 텍스트/하이라이트로 재렌더
-        const finalText =
-          typeof data.final_text === 'string'
-            ? data.final_text
-            : typeof data.text === 'string'
-            ? data.text
-            : bubble.translation;
-        const finalRanges: HighlightRange[] = Array.isArray(data.highlights)
-          ? data.highlights.map((r: any) => ({
-              start: Number(r.start ?? 0),
-              end: Number(r.end ?? 0),
-              label: r.label,
-            }))
-          : [];
-
-        const next: Bubble = {
-          ...bubble,
-          translation: finalText,
-          translationFinal: true,
-          translationHighlights: finalRanges,
-        };
-        if (data.original) {
-          next.transcript = String(data.original);
-          next.transcriptFinal = true;
-        }
-        setBubble(bubbleId, next);
-
-        // 보조 상태: liveMessages 추가 + liveBuffer 제거(가이드 준수)
-        const msg: HistoryMessage = {
-          speaker: fromIdentity,
-          text: String(data.original ?? ''),
-          translated: String(finalText ?? ''),
-          datetime: Math.floor((data.timestamp ?? Date.now()) * (data.timestamp > 10_000_000_000 ? 1 : 0.001)),
-        };
-        setLiveMessages((prev) => [...prev, msg]);
-        if (preferredSegId) liveBufferRef.current.delete(preferredSegId);
+        return;
       }
+
+      const finalText =
+        typeof data.final_text === 'string'
+          ? data.final_text
+          : typeof data.text === 'string'
+          ? data.text
+          : bubble.translation;
+      const finalRanges: HighlightRange[] = Array.isArray(data.highlights)
+        ? data.highlights.map((r: any) => ({
+            start: Number(r.start ?? 0),
+            end: Number(r.end ?? 0),
+            label: r.label,
+          }))
+        : [];
+
+      const next: Bubble = {
+        ...bubble,
+        translation: finalText,
+        translationFinal: true,
+        translationHighlights: finalRanges,
+        startedAt: Math.min(bubble.startedAt, startedAt),
+      };
+      if (data.original) {
+        next.transcript = String(data.original);
+        next.transcriptFinal = true;
+      }
+      setBubble(bubbleId, next);
+
+      const msg: HistoryMessage = {
+        speaker: fromIdentity,
+        text: String(data.original ?? ''),
+        translated: String(finalText ?? ''),
+        datetime: Math.floor(
+          (data.timestamp ?? Date.now()) * (data.timestamp > 10_000_000_000 ? 1 : 0.001),
+        ),
+      };
+      setLiveMessages((prev) => [...prev, msg]);
+    };
+
+    const handleTranscriptionData = (data: any, fromIdentity: string, fromName: string) => {
+      if (!['transcription_live', 'transcription_final'].includes(data.type)) return;
+
+      console.log('Transcription_Data: ', data);
+
+      const bubbleId: string = data.seg_id || makeTempBubbleId();
+      const startedAt = toMilliseconds(data.timestamp ?? Date.now());
+
+      const seed: Bubble = {
+        id: bubbleId,
+        fromIdentity,
+        fromName,
+        role: 'user',
+        startedAt,
+        transcript: '',
+        transcriptFinal: false,
+        translation: '',
+        translationFinal: false,
+        translationHighlights: [],
+      };
+      const bubble = ensureBubble(bubbleId, seed);
+
+      const piece = String(data.text ?? '');
+      if (!piece) return;
+
+      if (data.type === 'transcription_live') {
+        if (lastTranscriptionPieceById.current.get(bubbleId) === piece) return;
+        lastTranscriptionPieceById.current.set(bubbleId, piece);
+
+        const merged = mergeIncrementalText(bubble.transcript, piece);
+        if (merged !== bubble.transcript || bubble.transcriptFinal !== false) {
+          setBubble(bubbleId, {
+            ...bubble,
+            transcript: merged,
+            transcriptFinal: false,
+            startedAt: Math.min(bubble.startedAt, startedAt),
+          });
+        }
+        return;
+      }
+
+      lastTranscriptionPieceById.current.set(bubbleId, piece);
+
+      setBubble(bubbleId, {
+        ...bubble,
+        transcript: piece,
+        transcriptFinal: true,
+        startedAt: Math.min(bubble.startedAt, startedAt),
+      });
+    };
+
+    const onData = (
+      payload: Uint8Array,
+      participant?: Participant,
+      kind?: DataPacket_Kind,
+      topic?: string,
+    ) => {
+      if (topic !== 'translation_stream' && topic !== 'transcription_stream') return;
+
+      const data = safeParseJSON(payload);
+      if (!data || typeof data.type !== 'string') return;
+
+      const fromIdentity: string =
+        data.fromIdentity || participant?.identity || room.localParticipant.identity;
+      const fromName = data.from || resolveParticipantName(room, fromIdentity);
+
+      if (topic === 'transcription_stream') {
+        handleTranscriptionData(data, fromIdentity, fromName);
+        return;
+      }
+
+      handleTranslationData(data, fromIdentity, fromName);
     };
 
     room.on(RoomEvent.DataReceived, onData);
 
-    /* ---------------------------- 전사(TextStream) 핸들러 ---------------------------- */
-    const onTranscription = async (reader: any, pinfo: { identity: string }) => {
-      const info = reader?.info ?? {};
-      const attrs = (info.attributes ?? {}) as Record<string, any>;
-
-      // 1) 버블ID 추출(가능하면 lk.segment_id)
-      const bubbleId = extractSegmentId(info);
-      const startedAt = toMilliseconds(info.timestamp);
-
-      // 2) 화자 정보
-      const fromIdentity: string = pinfo.identity;
-      const fromName = resolveParticipantName(room, fromIdentity);
-      const role: Role = attrs['lk.transcribed_track_id'] ? 'user' : 'agent';
-
-      // 3) 번역이 먼저 온 임시 버블이 있다면 입양 → 정식 ID로 승격
-      const pendingTempId = pendingTempBubbleIdBySpeaker.current.get(fromIdentity);
-      let bubble = getBubble(bubbleId);
-      if (!bubble) {
-        if (pendingTempId && getBubble(pendingTempId)) {
-          const tmp = getBubble(pendingTempId)!;
-          bubbleMapRef.current.delete(pendingTempId);
-          pendingTempBubbleIdBySpeaker.current.delete(fromIdentity);
-          bubble = {
-            ...tmp,
-            id: bubbleId,
-            role,
-            startedAt: Math.min(tmp.startedAt, startedAt),
-          };
-          setBubble(bubbleId, bubble);
-        } else {
-          bubble = ensureBubble(bubbleId, {
-            id: bubbleId,
-            fromIdentity,
-            fromName,
-            role,
-            startedAt,
-            transcript: '',
-            transcriptFinal: false,
-            translation: '',
-            translationFinal: false,
-            translationHighlights: [],
-          });
-        }
-      }
-
-      // 4) 이 화자의 “열린 버블”로 등록(seg_id 없는 번역은 여기에 붙음)
-      currentOpenBubbleIdBySpeaker.current.set(fromIdentity, bubbleId);
-
-      // 5) 부분 전사 누적(증분/누적/중복 안전 처리)
-      for await (const chunk of reader) {
-        const piece = normalizeStreamChunk(chunk);
-        if (!piece) continue;
-
-        // 동일 조각 연속 필터
-        if (lastTranscriptionPieceById.current.get(bubbleId) === piece) continue;
-        lastTranscriptionPieceById.current.set(bubbleId, piece);
-
-        const current = getBubble(bubbleId);
-        if (!current) continue;
-
-        const merged = mergeIncrementalText(current.transcript, piece);
-        if (merged !== current.transcript || current.transcriptFinal !== false) {
-          setBubble(bubbleId, { ...current, transcript: merged, transcriptFinal: false });
-        }
-      }
-
-      // 6) 스트림 종료 → final 플래그 갱신
-      const current = getBubble(bubbleId);
-      if (current) {
-        const isFinal = Boolean(attrs['lk.transcription_final'] ?? true);
-        if (current.transcriptFinal !== isFinal) {
-          setBubble(bubbleId, { ...current, transcriptFinal: isFinal });
-        }
-      }
-    };
-
-    room.registerTextStreamHandler('lk.transcription', onTranscription);
-
     return () => {
       room.off(RoomEvent.DataReceived, onData);
-      room.unregisterTextStreamHandler('lk.transcription');
     };
   }, [room]);
 
@@ -527,9 +459,9 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
               <div className="break-words whitespace-pre-wrap">
                 {showTranslatingPlaceholder
                   ? '(translating...)'
-                  : (b.translationHighlights && b.translationHighlights.length > 0
-                      ? applyHighlights(b.translation, b.translationHighlights)
-                      : b.translation)}
+                  : b.translationHighlights && b.translationHighlights.length > 0
+                  ? applyHighlights(b.translation, b.translationHighlights)
+                  : b.translation}
               </div>
 
               {/* 아랫줄: 전사(원문) */}
