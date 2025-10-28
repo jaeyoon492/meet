@@ -86,19 +86,107 @@ function makeTempBubbleId(): string {
 
 /* ------------------------------ 하이라이트 유틸 ------------------------------ */
 
-export type HighlightRange = { start: number; end: number; label?: string };
+export type HighlightRange = {
+  start: number;
+  end: number;
+  label?: string;
+  canonical?: string | string[];
+  matched?: string;
+  matchedVariants?: string[];
+};
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function normalizeCanonical(
+  input: string | string[] | null | undefined,
+): string | string[] | undefined {
+  const list = Array.isArray(input) ? uniqueStrings(input) : uniqueStrings([input]);
+  if (list.length === 0) return undefined;
+  return list.length === 1 ? list[0] : list;
+}
+
+function mergeCanonical(
+  base?: string | string[],
+  incoming?: string | string[],
+): string | string[] | undefined {
+  const merged = uniqueStrings([
+    ...(Array.isArray(base) ? base : base ? [base] : []),
+    ...(Array.isArray(incoming) ? incoming : incoming ? [incoming] : []),
+  ]);
+  if (merged.length === 0) return undefined;
+  return merged.length === 1 ? merged[0] : merged;
+}
+
+function mergeVariantLists(
+  base?: string[],
+  incoming?: string[],
+): string[] | undefined {
+  const merged = uniqueStrings([...(base ?? []), ...(incoming ?? [])]);
+  return merged.length ? merged : undefined;
+}
+
+function deserializeHighlightRange(raw: any, offsetBase = 0): HighlightRange | null {
+  if (!raw) return null;
+  const start = offsetBase + Number(raw.start ?? 0);
+  const end = offsetBase + Number(raw.end ?? 0);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+
+  const label = typeof raw.label === 'string' && raw.label.trim().length ? raw.label : undefined;
+
+  const canonical = normalizeCanonical(raw.canonical);
+
+  const matched = typeof raw.matched === 'string' && raw.matched.trim().length ? raw.matched : undefined;
+  const variantsInput = Array.isArray(raw.matchedVariants)
+    ? raw.matchedVariants
+    : Array.isArray(raw.matched_variants)
+    ? raw.matched_variants
+    : [];
+  const matchedVariants = mergeVariantLists(uniqueStrings(variantsInput), matched ? [matched] : undefined);
+
+  return {
+    start,
+    end,
+    label,
+    canonical,
+    matched,
+    matchedVariants,
+  };
+}
 
 /**
  * text에 대해 ranges([start,end))를 안전하게 적용하여 ReactNode 조각 배열 생성
  * - 중첩은 서버에서 병합되어 오므로 그대로 분할/래핑
  * - out-of-bound 범위는 클램프
  */
+function canonicalToAttr(value?: string | string[]): string | undefined {
+  if (!value) return undefined;
+  const list = Array.isArray(value) ? value : [value];
+  const normalized = uniqueStrings(list);
+  if (!normalized.length) return undefined;
+  return normalized.join(', ');
+}
+
 function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNode {
   if (!text) return null;
   const len = text.length;
   const rs = Array.isArray(ranges)
     ? [...ranges]
-        .map((r) => ({ start: Math.max(0, r.start), end: Math.max(0, r.end), label: r.label }))
+        .map((r) => ({
+          ...r,
+          start: Math.max(0, Number.isFinite(r.start) ? r.start : 0),
+          end: Math.max(0, Number.isFinite(r.end) ? r.end : 0),
+        }))
         .filter((r) => r.end > r.start && r.start < len)
         .map((r) => ({ ...r, end: Math.min(len, r.end) }))
         .sort((a, b) => a.start - b.start || a.end - b.end)
@@ -112,8 +200,17 @@ function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNo
       out.push(text.slice(cursor, r.start));
     }
     const cls = `hl ${r.label ? r.label : 'keyword'}`;
+    const canonicalAttr = canonicalToAttr(r.canonical);
+    const variantsAttr = Array.isArray(r.matchedVariants)
+      ? uniqueStrings(r.matchedVariants).join(', ')
+      : undefined;
+    const dataAttrs: Record<string, string> = {};
+    if (canonicalAttr) dataAttrs['data-canonical'] = canonicalAttr;
+    if (variantsAttr) dataAttrs['data-variants'] = variantsAttr;
+    if (r.matched) dataAttrs['data-matched'] = r.matched;
+    const keyParts = [String(r.start), String(r.end), r.label ?? 'k', canonicalAttr ?? ''];
     out.push(
-      <span className={cls} key={`${r.start}:${r.end}:${r.label ?? 'k'}`}>
+      <span className={cls} key={keyParts.join(':')} title={canonicalAttr ?? undefined} {...dataAttrs}>
         {text.slice(r.start, r.end)}
       </span>,
     );
@@ -127,18 +224,42 @@ function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNo
 
 /** ranges 병합/중복 제거(겹침 없음이 보장되지만 중복 항목은 제거) */
 function mergeRanges(prev: HighlightRange[], next: HighlightRange[]): HighlightRange[] {
-  if (!prev?.length) return [...next];
-  if (!next?.length) return [...prev];
-  const seen = new Set<string>();
-  const merged = [...prev, ...next]
-    .sort((a, b) => a.start - b.start || a.end - b.end)
-    .filter((r) => {
-      const key = `${r.start}:${r.end}:${r.label ?? ''}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  return merged;
+  if (!prev?.length) return next ? [...next] : [];
+  if (!next?.length) return prev ? [...prev] : [];
+
+  const byKey = new Map<string, HighlightRange>();
+  const pushRange = (range: HighlightRange) => {
+    if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) return;
+    const key = `${range.start}:${range.end}:${range.label ?? ''}`;
+    const normalizedVariants = mergeVariantLists(
+      range.matchedVariants,
+      range.matched ? [range.matched] : undefined,
+    );
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        ...range,
+        canonical: normalizeCanonical(range.canonical),
+        matchedVariants: normalizedVariants,
+      });
+      return;
+    }
+    existing.canonical = mergeCanonical(existing.canonical, range.canonical);
+    existing.matched = existing.matched ?? range.matched;
+    const mergedVariants = mergeVariantLists(existing.matchedVariants, normalizedVariants);
+    existing.matchedVariants = mergedVariants;
+  };
+
+  for (const item of prev) pushRange(item);
+  for (const item of next) pushRange(item);
+
+  return Array.from(byKey.values())
+    .map((r) => ({
+      ...r,
+      canonical: normalizeCanonical(r.canonical),
+      matchedVariants: r.matchedVariants ? uniqueStrings(r.matchedVariants) : undefined,
+    }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
 /** offset_base 위치에 chunk를 교체 삽입(append 호환) */
@@ -285,11 +406,9 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
         const updatedText = applyChunkAtOffset(bubble.translation, piece, offsetBase);
 
         const incRanges: HighlightRange[] = Array.isArray(data.highlights)
-          ? data.highlights.map((r: any) => ({
-              start: offsetBase + Number(r.start ?? 0),
-              end: offsetBase + Number(r.end ?? 0),
-              label: r.label,
-            }))
+          ? data.highlights
+              .map((r: any) => deserializeHighlightRange(r, offsetBase))
+              .filter((r): r is HighlightRange => r != null)
           : [];
         const mergedRanges = mergeRanges(bubble.translationHighlights ?? [], incRanges);
 
@@ -310,11 +429,9 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
           ? data.text
           : bubble.translation;
       const finalRanges: HighlightRange[] = Array.isArray(data.highlights)
-        ? data.highlights.map((r: any) => ({
-            start: Number(r.start ?? 0),
-            end: Number(r.end ?? 0),
-            label: r.label,
-          }))
+        ? data.highlights
+            .map((r: any) => deserializeHighlightRange(r))
+            .filter((r): r is HighlightRange => r != null)
         : [];
 
       const next: Bubble = {
