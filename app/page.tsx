@@ -32,8 +32,8 @@ function DemoMeeting(props: {}) {
 export default function Page() {
   return (
     <div className="min-h-screen bg-ofu100 text-white flex flex-col">
-      <main className="flex-1 flex flex-col items-center justify-center" data-lk-theme="default">
-        <header className="text-center mt-[104px] mb-[97px]">
+      <main className="flex-1 flex flex-col items-center justify-evenly" data-lk-theme="default">
+        <header className="text-center flex flex-col items-center justify-center ">
           <p className="text-[22px] font-extrabold text-ofu300">AI Assistant</p>
           <p className="text-2xl font-bold text-black mt-2">지금 AI 접견을 진행해보세요.</p>
           <p className="text-lg font-normal text-ofu400 mt-2">
@@ -41,7 +41,7 @@ export default function Page() {
           </p>
         </header>
 
-        <JusticeLogo className="mb-[68px]" />
+        <JusticeLogo className="" />
         <JusticeTextLogo />
       </main>
       <footer className="flex flex-col items-center justify-center h-[150px] text-center bg-white rounded-t-[20px] px-[27px] pt-[24px]">

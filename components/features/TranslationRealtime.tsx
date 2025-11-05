@@ -128,10 +128,7 @@ function mergeCanonical(
   return merged.length === 1 ? merged[0] : merged;
 }
 
-function mergeVariantLists(
-  base?: string[],
-  incoming?: string[],
-): string[] | undefined {
+function mergeVariantLists(base?: string[], incoming?: string[]): string[] | undefined {
   const merged = uniqueStrings([...(base ?? []), ...(incoming ?? [])]);
   return merged.length ? merged : undefined;
 }
@@ -146,13 +143,17 @@ function deserializeHighlightRange(raw: any, offsetBase = 0): HighlightRange | n
 
   const canonical = normalizeCanonical(raw.canonical);
 
-  const matched = typeof raw.matched === 'string' && raw.matched.trim().length ? raw.matched : undefined;
+  const matched =
+    typeof raw.matched === 'string' && raw.matched.trim().length ? raw.matched : undefined;
   const variantsInput = Array.isArray(raw.matchedVariants)
     ? raw.matchedVariants
     : Array.isArray(raw.matched_variants)
     ? raw.matched_variants
     : [];
-  const matchedVariants = mergeVariantLists(uniqueStrings(variantsInput), matched ? [matched] : undefined);
+  const matchedVariants = mergeVariantLists(
+    uniqueStrings(variantsInput),
+    matched ? [matched] : undefined,
+  );
 
   return {
     start,
@@ -210,7 +211,12 @@ function applyHighlights(text: string, ranges?: HighlightRange[]): React.ReactNo
     if (r.matched) dataAttrs['data-matched'] = r.matched;
     const keyParts = [String(r.start), String(r.end), r.label ?? 'k', canonicalAttr ?? ''];
     out.push(
-      <span className={cls} key={keyParts.join(':')} title={canonicalAttr ?? undefined} {...dataAttrs}>
+      <span
+        className={cls}
+        key={keyParts.join(':')}
+        title={canonicalAttr ?? undefined}
+        {...dataAttrs}
+      >
         {text.slice(r.start, r.end)}
       </span>,
     );
@@ -408,7 +414,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
         const incRanges: HighlightRange[] = Array.isArray(data.highlights)
           ? data.highlights
               .map((r: any) => deserializeHighlightRange(r, offsetBase))
-              .filter((r): r is HighlightRange => r != null)
+              .filter((r: any): r is HighlightRange => r != null)
           : [];
         const mergedRanges = mergeRanges(bubble.translationHighlights ?? [], incRanges);
 
@@ -431,7 +437,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
       const finalRanges: HighlightRange[] = Array.isArray(data.highlights)
         ? data.highlights
             .map((r: any) => deserializeHighlightRange(r))
-            .filter((r): r is HighlightRange => r != null)
+            .filter((r: any): r is HighlightRange => r != null)
         : [];
 
       const next: Bubble = {
