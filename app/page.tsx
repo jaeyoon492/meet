@@ -31,7 +31,7 @@ function DemoMeeting(props: {}) {
 
 export default function Page() {
   return (
-    <div className="min-h-screen bg-ofu100 text-white flex flex-col">
+    <div className="min-h-dvh bg-ofu100 text-white flex flex-col">
       <main className="flex-1 flex flex-col items-center justify-evenly" data-lk-theme="default">
         <header className="text-center flex flex-col items-center justify-center ">
           <p className="text-[22px] font-extrabold text-ofu300">AI Assistant</p>
