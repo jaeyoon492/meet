@@ -296,20 +296,22 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
   const lastTranscriptionPieceById = useRef<Map<string, string>>(new Map());
   const lastTranslationPieceById = useRef<Map<string, string>>(new Map());
 
+  const bottomRef = useRef<HTMLDivElement>(null);
+
   /** 업서트 도우미들 */
-  function setBubble(id: string, next: Bubble) {
+  const setBubble = (id: string, next: Bubble) => {
     bubbleMapRef.current.set(id, next);
     setVersion((v) => v + 1);
-  }
-  function getBubble(id?: string): Bubble | undefined {
+  };
+  const getBubble = (id?: string): Bubble | undefined => {
     return id ? bubbleMapRef.current.get(id) : undefined;
-  }
-  function ensureBubble(id: string, seed: Bubble): Bubble {
+  };
+  const ensureBubble = (id: string, seed: Bubble): Bubble => {
     const existing = bubbleMapRef.current.get(id);
     if (existing) return existing;
     setBubble(id, seed);
     return seed;
-  }
+  };
 
   /* ------------------------------- 초기 히스토리 로드 ------------------------------- */
   useEffect(() => {
@@ -552,6 +554,11 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
     return [...bubbleMapRef.current.values()].sort((a, b) => a.startedAt - b.startedAt).slice(-100);
   }, [version]);
 
+  /* ------------------------------- 렌더 목록 자동 스크롤 ------------------------------- */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [items]);
+
   return (
     <div
       className="relative h-full max-[640px]:h-2/5 max-[640px]:w-full min-h-0 max-[640px]:bottom-0"
@@ -597,6 +604,7 @@ export default function TranslationRealtime({ selfName }: { selfName: string }) 
             </div>
           );
         })}
+        <div ref={bottomRef} />
       </div>
     </div>
   );
