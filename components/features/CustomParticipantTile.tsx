@@ -92,8 +92,9 @@ export const CustomParticipantTile = React.forwardRef<HTMLDivElement, Participan
     const camPub = participant.getTrackPublication(Track.Source.Camera);
     const micPub = participant.getTrackPublication(Track.Source.Microphone);
 
-    // 오디오 트랙 존재/생존 여부
-    const showVideo = !!camPub && camPub.isSubscribed && !camPub.isMuted && !!camPub.track;
+    const isCameraTile = givenTrackRef.source === Track.Source.Camera;
+    // publication 업데이트 타이밍에 덜 민감하도록 source 기반으로 우선 판별
+    const showVideo = isCameraTile && (camPub ? !camPub.isMuted : true);
 
     const audioReady =
       !!micPub?.track?.mediaStreamTrack &&
@@ -138,6 +139,32 @@ export const CustomParticipantTile = React.forwardRef<HTMLDivElement, Participan
       [givenTrackRef, layoutContext],
     );
 
+    const getBestVideoEl = React.useCallback((): HTMLVideoElement | null => {
+      const root = containerRef.current;
+      if (!root) return null;
+
+      const videos = Array.from(root.querySelectorAll('video'));
+      if (!videos.length) return null;
+
+      return (
+        videos.find(
+          (v) =>
+            v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+            v.videoWidth > 0 &&
+            v.videoHeight > 0 &&
+            v.clientWidth > 0 &&
+            v.clientHeight > 0,
+        ) ??
+        videos.find(
+          (v) =>
+            v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+            v.videoWidth > 0 &&
+            v.videoHeight > 0,
+        ) ??
+        videos[0]
+      );
+    }, []);
+
     return (
       <div ref={ref} style={{ position: 'relative' }} {...elementProps}>
         <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -148,8 +175,11 @@ export const CustomParticipantTile = React.forwardRef<HTMLDivElement, Participan
                 <>
                   {/* --- 3) 표시 로직: 비디오 > 오디오 바 > 플레이스홀더 --- */}
                   {showVideo ? (
-                    <TrackRefContextIfNeeded trackRef={cameraRef}>
-                      <VideoTrack style={{ objectFit: 'contain', transform: 'none' }} />
+                    <TrackRefContextIfNeeded trackRef={cameraRef ?? givenTrackRef}>
+                      <VideoTrack
+                        key={`${participant.sid}-cam`}
+                        style={{ objectFit: 'contain', transform: 'none' }}
+                      />
                     </TrackRefContextIfNeeded>
                   ) : showAudioBars && microphoneRef ? (
                     // ★ 마이크 컨텍스트 강제 + AudioTrack을 먼저 렌더
@@ -214,8 +244,9 @@ export const CustomParticipantTile = React.forwardRef<HTMLDivElement, Participan
                   {/* --- 5) 비디오일 때만 Overlay 렌더 --- */}
                   {showVideo && (
                     <Overlay
+                      key={`${participant.sid}-overlay`}
                       room={room}
-                      getVideoEl={() => containerRef.current?.querySelector('video') ?? null}
+                      getVideoEl={getBestVideoEl}
                       participantIdentity={participant.identity}
                     />
                   )}
