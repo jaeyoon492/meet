@@ -398,6 +398,7 @@ function CustomTrack({
           showTranscriptions={showTranscriptions}
           handleShowLanguageSelector={handleShowLanguageSelector}
           showLanguageSelector={showLanguageSelector}
+          room={room}
         />
       </div>
     </LayoutContextProvider>

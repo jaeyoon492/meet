@@ -1,4 +1,4 @@
-import { Track } from 'livekit-client';
+import { DataPacket_Kind, Participant, Room, RoomEvent, Track } from 'livekit-client';
 import * as React from 'react';
 import { supportsScreenSharing } from '@livekit/components-core';
 import type { TrackReferenceOrPlaceholder } from '@livekit/components-core';
@@ -43,6 +43,7 @@ export interface ControlBarProps extends React.HTMLAttributes<HTMLDivElement> {
   showTranscriptions: boolean;
   showLanguageSelector: boolean;
   handleShowLanguageSelector: () => void;
+  room: Room;
 }
 
 export function CustomControlBar({
@@ -54,6 +55,7 @@ export function CustomControlBar({
   showTranscriptions,
   handleShowLanguageSelector,
   showLanguageSelector,
+  room,
   ...props
 }: ControlBarProps) {
   const [isChatOpen, setIsChatOpen] = React.useState(false);
@@ -110,6 +112,14 @@ export function CustomControlBar({
   );
 
   const htmlProps = mergeProps({ className: 'lk-control-bar' }, props);
+  const enrollTopic = React.useMemo(
+    () => process.env.NEXT_PUBLIC_FACE_ENROLL_TOPIC || 'face_enroll',
+    [],
+  );
+  const enrollResultTopicBase = React.useMemo(
+    () => process.env.NEXT_PUBLIC_FACE_ENROLL_RESULT_TOPIC || 'face_enroll_result',
+    [],
+  );
 
   const {
     userChoices,
@@ -144,6 +154,61 @@ export function CustomControlBar({
 
   // 마이크 토글 상태는 useTrackMutedIndicator로 동기화되어 별도 로그 필요 없음
 
+  const publishEnrollRequest = React.useCallback(async () => {
+    if (!room?.localParticipant) return;
+    const defaultName = room.localParticipant.name || room.localParticipant.identity || '';
+    const input = window.prompt('등록할 이름을 입력하세요', defaultName);
+    const name = (input || '').trim();
+    if (!name) return;
+
+    const payload = {
+      type: 'face_enroll_request',
+      name,
+      target_identity: room.localParticipant.identity,
+    };
+    const encoded = new TextEncoder().encode(JSON.stringify(payload));
+    await room.localParticipant.publishData(encoded, {
+      reliable: true,
+      topic: enrollTopic,
+    });
+  }, [enrollTopic, room]);
+
+  React.useEffect(() => {
+    if (!room?.localParticipant) return;
+
+    const onData = (
+      payload: Uint8Array,
+      _participant?: Participant,
+      _kind?: DataPacket_Kind,
+      topic?: string,
+    ) => {
+      let msg: any;
+      try {
+        msg = JSON.parse(new TextDecoder().decode(payload));
+      } catch {
+        return;
+      }
+      if (msg?.type !== 'face_enroll_result') return;
+      const topicMatch =
+        !topic ||
+        topic === enrollResultTopicBase ||
+        topic === `${enrollResultTopicBase}.${room.localParticipant.identity}`;
+      if (!topicMatch) return;
+      if (msg.participant && msg.participant !== room.localParticipant.identity) return;
+
+      if (msg.ok) {
+        window.alert(`얼굴 등록 완료: ${msg.name} (샘플 ${msg.count})`);
+      } else {
+        window.alert(`얼굴 등록 실패: ${msg.reason || 'unknown'}`);
+      }
+    };
+
+    room.on(RoomEvent.DataReceived, onData);
+    return () => {
+      room.off(RoomEvent.DataReceived, onData);
+    };
+  }, [enrollResultTopicBase, room]);
+
   return (
     <div {...htmlProps}>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -171,6 +236,19 @@ export function CustomControlBar({
           onClick={handleShowLanguageSelector}
         >
           <LanguageIcon />
+        </button>
+
+        <button
+          className="lk-button"
+          style={{ backgroundColor: '#404040', border: 'none', padding: '0px 16px' }}
+          onClick={() => {
+            publishEnrollRequest().catch((err) => {
+              console.error('face enroll request failed', err);
+              window.alert('얼굴 등록 요청 전송에 실패했습니다.');
+            });
+          }}
+        >
+          등록
         </button>
 
         <button

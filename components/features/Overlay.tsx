@@ -3,8 +3,45 @@ import { useEffect, useRef, useState } from 'react';
 
 type Det = { bbox: number[]; cls: number; conf: number; track_id: number; participant: string };
 type ParticipantDetState = { dets: Det[]; updatedAt: number };
+type FaceLandmarkFace = { face_index: number; bbox: number[]; landmarks: number[][] };
+type FaceIdentityFace = { bbox: number[]; name: string; similarity: number; live?: boolean };
+type ParticipantLandmarkState = {
+  faces: FaceLandmarkFace[];
+  isLive: boolean;
+  updatedAt: number;
+};
+type ParticipantIdentityState = {
+  faces: FaceIdentityFace[];
+  isLive: boolean;
+  updatedAt: number;
+};
+const FACEMESH_CONTOUR_CONNECTIONS: Array<[number, number]> = [
+  [0, 267], [7, 163], [10, 338], [13, 312], [14, 317], [17, 314], [21, 54], [33, 7],
+  [33, 246], [37, 0], [39, 37], [40, 39], [46, 53], [52, 65], [53, 52], [54, 103],
+  [58, 132], [61, 146], [61, 185], [63, 105], [65, 55], [66, 107], [67, 109], [70, 63],
+  [78, 95], [78, 191], [80, 81], [81, 82], [82, 13], [84, 17], [87, 14], [88, 178],
+  [91, 181], [93, 234], [95, 88], [103, 67], [105, 66], [109, 10], [127, 162], [132, 93],
+  [136, 172], [144, 145], [145, 153], [146, 91], [148, 176], [149, 150], [150, 136], [152, 148],
+  [153, 154], [154, 155], [155, 133], [157, 173], [158, 157], [159, 158], [160, 159], [161, 160],
+  [162, 21], [163, 144], [172, 58], [173, 133], [176, 149], [178, 87], [181, 84], [185, 40],
+  [191, 80], [234, 127], [246, 161], [249, 390], [251, 389], [263, 249], [263, 466], [267, 269],
+  [269, 270], [270, 409], [276, 283], [282, 295], [283, 282], [284, 251], [288, 397], [293, 334],
+  [295, 285], [296, 336], [297, 332], [300, 293], [310, 415], [311, 310], [312, 311], [314, 405],
+  [317, 402], [318, 324], [321, 375], [323, 361], [324, 308], [332, 284], [334, 296], [338, 297],
+  [356, 454], [361, 288], [365, 379], [373, 374], [374, 380], [375, 291], [377, 152], [378, 400],
+  [379, 378], [380, 381], [381, 382], [382, 362], [384, 398], [385, 384], [386, 385], [387, 386],
+  [388, 387], [389, 356], [390, 373], [397, 365], [398, 362], [400, 377], [402, 318], [405, 321],
+  [409, 291], [415, 308], [454, 323], [466, 388],
+];
+const FACEMESH_IRIS_CONNECTIONS: Array<[number, number]> = [
+  [469, 470], [470, 471], [471, 472], [472, 469], [474, 475], [475, 476], [476, 477], [477, 474],
+];
 const DET_TTL_MS = 1200;
+const LANDMARK_TTL_MS = 1200;
+const IDENTITY_TTL_MS = 2000;
 const roomDetStateStore = new WeakMap<Room, Map<string, ParticipantDetState>>();
+const roomLandmarkStateStore = new WeakMap<Room, Map<string, ParticipantLandmarkState>>();
+const roomIdentityStateStore = new WeakMap<Room, Map<string, ParticipantIdentityState>>();
 const roomOverlayMountStore = new WeakMap<Room, Map<string, number[]>>();
 let overlayInstanceSeq = 0;
 
@@ -33,6 +70,22 @@ function getOverlayMountState(room: Room): Map<string, number[]> {
   return created;
 }
 
+function getLandmarkState(room: Room): Map<string, ParticipantLandmarkState> {
+  const existing = roomLandmarkStateStore.get(room);
+  if (existing) return existing;
+  const created = new Map<string, ParticipantLandmarkState>();
+  roomLandmarkStateStore.set(room, created);
+  return created;
+}
+
+function getIdentityState(room: Room): Map<string, ParticipantIdentityState> {
+  const existing = roomIdentityStateStore.get(room);
+  if (existing) return existing;
+  const created = new Map<string, ParticipantIdentityState>();
+  roomIdentityStateStore.set(room, created);
+  return created;
+}
+
 type OverlayDebugSnapshot = {
   effectRuns: number;
   packetsTotal: number;
@@ -40,7 +93,9 @@ type OverlayDebugSnapshot = {
   lastPacketAt: number | null;
   lastPacketForMeAt: number | null;
   lastDrawAt: number | null;
-  lastBoxCount: number;
+  lastYoloCount: number;
+  lastLandmarkCount: number;
+  lastIdentityCount: number;
   videoState: string;
 };
 
@@ -55,6 +110,8 @@ export function Overlay({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detStateRef = useRef<Map<string, ParticipantDetState>>(new Map());
+  const landmarkStateRef = useRef<Map<string, ParticipantLandmarkState>>(new Map());
+  const identityStateRef = useRef<Map<string, ParticipantIdentityState>>(new Map());
   const decoderRef = useRef(new TextDecoder());
   const getVideoElRef = useRef(getVideoEl);
   const instanceIdRef = useRef(0);
@@ -65,7 +122,9 @@ export function Overlay({
   const lastPacketAtRef = useRef<number | null>(null);
   const lastPacketForMeAtRef = useRef<number | null>(null);
   const lastDrawAtRef = useRef<number | null>(null);
-  const lastBoxCountRef = useRef(0);
+  const lastYoloCountRef = useRef(0);
+  const lastLandmarkCountRef = useRef(0);
+  const lastIdentityCountRef = useRef(0);
   const videoStateRef = useRef('video=none');
   const [debugSnapshot, setDebugSnapshot] = useState<OverlayDebugSnapshot>({
     effectRuns: 0,
@@ -74,7 +133,9 @@ export function Overlay({
     lastPacketAt: null,
     lastPacketForMeAt: null,
     lastDrawAt: null,
-    lastBoxCount: 0,
+    lastYoloCount: 0,
+    lastLandmarkCount: 0,
+    lastIdentityCount: 0,
     videoState: 'video=none',
   });
   const isDebug = process.env.NODE_ENV !== 'production';
@@ -105,7 +166,9 @@ export function Overlay({
         lastPacketAt: lastPacketAtRef.current,
         lastPacketForMeAt: lastPacketForMeAtRef.current,
         lastDrawAt: lastDrawAtRef.current,
-        lastBoxCount: lastBoxCountRef.current,
+        lastYoloCount: lastYoloCountRef.current,
+        lastLandmarkCount: lastLandmarkCountRef.current,
+        lastIdentityCount: lastIdentityCountRef.current,
         videoState: videoStateRef.current,
       });
     }, 500);
@@ -175,6 +238,38 @@ export function Overlay({
     return { x, y, w, h };
   }
 
+  function mapPoint(nx: number, ny: number, video: HTMLVideoElement, canvas: HTMLCanvasElement) {
+    const { x, y } = mapBBox([nx, ny, 0, 0], video, canvas);
+    return { x, y };
+  }
+
+  function drawConnections(
+    ctx: CanvasRenderingContext2D,
+    facePoints: number[][],
+    connections: Array<[number, number]>,
+    video: HTMLVideoElement,
+    canvas: HTMLCanvasElement,
+  ) {
+    for (const [a, b] of connections) {
+      const pa = facePoints[a];
+      const pb = facePoints[b];
+      if (!pa || !pb || pa.length < 2 || pb.length < 2) continue;
+      const pax = Number(pa[0]);
+      const pay = Number(pa[1]);
+      const pbx = Number(pb[0]);
+      const pby = Number(pb[1]);
+      if (!Number.isFinite(pax) || !Number.isFinite(pay) || !Number.isFinite(pbx) || !Number.isFinite(pby)) {
+        continue;
+      }
+      const p1 = mapPoint(pax, pay, video, canvas);
+      const p2 = mapPoint(pbx, pby, video, canvas);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+  }
+
   useEffect(() => {
     effectRunsRef.current += 1;
     const cvs = canvasRef.current;
@@ -186,6 +281,8 @@ export function Overlay({
     }
     syncCanvasSize();
     detStateRef.current = getRoomState(room);
+    landmarkStateRef.current = getLandmarkState(room);
+    identityStateRef.current = getIdentityState(room);
 
     const isDet = (value: any): value is Det =>
       !!value &&
@@ -195,6 +292,20 @@ export function Overlay({
       typeof value.cls === 'number' &&
       typeof value.conf === 'number' &&
       typeof value.track_id === 'number';
+
+    const isLandmarkFace = (value: any): value is FaceLandmarkFace =>
+      !!value &&
+      typeof value.face_index === 'number' &&
+      Array.isArray(value.bbox) &&
+      value.bbox.length === 4 &&
+      Array.isArray(value.landmarks);
+
+    const isIdentityFace = (value: any): value is FaceIdentityFace =>
+      !!value &&
+      Array.isArray(value.bbox) &&
+      value.bbox.length === 4 &&
+      typeof value.name === 'string' &&
+      typeof value.similarity === 'number';
 
     const upsertParticipantDets = (identity: string, dets: Det[]) => {
       if (!identity) return;
@@ -211,6 +322,27 @@ export function Overlay({
       detStateRef.current.set(identity, { dets, updatedAt: Date.now() });
     };
 
+    const upsertParticipantLandmarks = (
+      identity: string,
+      faces: FaceLandmarkFace[],
+      isLive: boolean,
+    ) => {
+      if (!identity) return;
+      landmarkStateRef.current.set(identity, { faces, isLive, updatedAt: Date.now() });
+    };
+
+    const upsertParticipantIdentity = (identity: string, faces: FaceIdentityFace[], isLive: boolean) => {
+      if (!identity) return;
+      identityStateRef.current.set(identity, { faces, isLive, updatedAt: Date.now() });
+    };
+
+    const topicIdentity = (baseTopic: string, value?: string): string | null => {
+      if (!value) return null;
+      const prefix = `${baseTopic}.`;
+      if (!value.startsWith(prefix)) return null;
+      return value.slice(prefix.length);
+    };
+
     const onData = (
       payload: Uint8Array,
       _participant?: Participant,
@@ -223,39 +355,73 @@ export function Overlay({
       } catch {
         return;
       }
-      if (msg?.type !== 'yolo_dets' || !Array.isArray(msg.dets)) return;
+      const msgType = msg?.type;
+      if (msgType !== 'yolo_dets' && msgType !== 'face_landmarks' && msgType !== 'face_identity') {
+        return;
+      }
       const now = Date.now();
       packetsTotalRef.current += 1;
       lastPacketAtRef.current = now;
 
-      const validDets: Det[] = msg.dets.filter(isDet);
-      if (topic?.startsWith('yolo_dets.')) {
-        const topicIdentity = topic.slice('yolo_dets.'.length);
-        if (topicIdentity === participantIdentity) {
+      if (msgType === 'yolo_dets') {
+        if (!Array.isArray(msg.dets)) return;
+        const validDets: Det[] = msg.dets.filter(isDet);
+        const splitIdentity = topicIdentity('yolo_dets', topic);
+        if (splitIdentity) {
+          if (splitIdentity === participantIdentity) {
+            packetsForMeRef.current += 1;
+            lastPacketForMeAtRef.current = now;
+          }
+          // topic이 이미 참가자를 식별하므로 participant 필드는 topic 기준으로 정규화
+          upsertParticipantDets(
+            splitIdentity,
+            validDets.map((d) =>
+              d.participant === splitIdentity ? d : { ...d, participant: splitIdentity },
+            ),
+          );
+          return;
+        }
+
+        const grouped = new Map<string, Det[]>();
+        for (const d of validDets) {
+          const arr = grouped.get(d.participant) ?? [];
+          arr.push(d);
+          grouped.set(d.participant, arr);
+        }
+        if (grouped.has(participantIdentity)) {
           packetsForMeRef.current += 1;
           lastPacketForMeAtRef.current = now;
         }
-        // topic이 이미 참가자를 식별하므로 participant 필드는 topic 기준으로 정규화
-        upsertParticipantDets(
-          topicIdentity,
-          validDets.map((d) =>
-            d.participant === topicIdentity ? d : { ...d, participant: topicIdentity },
-          ),
-        );
+        grouped.forEach((dets, identity) => upsertParticipantDets(identity, dets));
         return;
       }
 
-      const grouped = new Map<string, Det[]>();
-      for (const d of validDets) {
-        const arr = grouped.get(d.participant) ?? [];
-        arr.push(d);
-        grouped.set(d.participant, arr);
+      if (msgType === 'face_landmarks') {
+        if (!Array.isArray(msg.faces)) return;
+        const splitIdentity = topicIdentity('face_landmarks', topic);
+        const identity = splitIdentity ?? msg.participant;
+        if (!identity || typeof identity !== 'string') return;
+        const faces: FaceLandmarkFace[] = msg.faces.filter(isLandmarkFace);
+        const isLive = !!msg.is_live;
+        if (identity === participantIdentity) {
+          packetsForMeRef.current += 1;
+          lastPacketForMeAtRef.current = now;
+        }
+        upsertParticipantLandmarks(identity, faces, isLive);
+        return;
       }
-      if (grouped.has(participantIdentity)) {
+
+      if (!Array.isArray(msg.faces)) return;
+      const splitIdentity = topicIdentity('face_identity', topic);
+      const identity = splitIdentity ?? msg.participant;
+      if (!identity || typeof identity !== 'string') return;
+      const faces: FaceIdentityFace[] = msg.faces.filter(isIdentityFace);
+      const isLive = !!msg.is_live;
+      if (identity === participantIdentity) {
         packetsForMeRef.current += 1;
         lastPacketForMeAtRef.current = now;
       }
-      grouped.forEach((dets, identity) => upsertParticipantDets(identity, dets));
+      upsertParticipantIdentity(identity, faces, isLive);
     };
 
     room.on(RoomEvent.DataReceived, onData);
@@ -283,11 +449,27 @@ export function Overlay({
           detStateRef.current.delete(identity);
         }
       }
+      for (const [identity, state] of landmarkStateRef.current.entries()) {
+        if (now - state.updatedAt > LANDMARK_TTL_MS) {
+          landmarkStateRef.current.delete(identity);
+        }
+      }
+      for (const [identity, state] of identityStateRef.current.entries()) {
+        if (now - state.updatedAt > IDENTITY_TTL_MS) {
+          identityStateRef.current.delete(identity);
+        }
+      }
 
-      const state = detStateRef.current.get(participantIdentity);
-      const dets = state ? state.dets : [];
+      const detState = detStateRef.current.get(participantIdentity);
+      const dets = detState ? detState.dets : [];
+      const landmarkState = landmarkStateRef.current.get(participantIdentity);
+      const landmarkFaces = landmarkState ? landmarkState.faces : [];
+      const identityState = identityStateRef.current.get(participantIdentity);
+      const identityFaces = identityState ? identityState.faces : [];
       lastDrawAtRef.current = now;
-      lastBoxCountRef.current = dets.length;
+      lastYoloCountRef.current = dets.length;
+      lastLandmarkCountRef.current = landmarkFaces.length;
+      lastIdentityCountRef.current = identityFaces.length;
 
       ctx.clearRect(0, 0, cvs.clientWidth, cvs.clientHeight);
       ctx.lineWidth = 2;
@@ -307,6 +489,50 @@ export function Overlay({
         ctx.fillStyle = '#fff';
         ctx.fillText(label, x + pad, y - 4);
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      }
+
+      ctx.strokeStyle = '#40c4ff';
+      ctx.lineWidth = 2;
+      for (const f of identityFaces) {
+        const { x, y, w, h } = mapBBox(f.bbox, vid, cvs);
+        ctx.strokeRect(x, y, w, h);
+        const who = f.name || 'Unknown';
+        const sim = Number.isFinite(f.similarity) ? ` ${(f.similarity * 100).toFixed(1)}%` : '';
+        const liveText = f.live === false ? ' no-live' : '';
+        const label = `${who}${sim}${liveText}`;
+        const pad = 4;
+        const lh = 16;
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(x, y - lh, tw + pad * 2, lh);
+        ctx.fillStyle = '#e6f7ff';
+        ctx.fillText(label, x + pad, y - 4);
+      }
+
+      ctx.fillStyle = '#ffeb3b';
+      for (const face of landmarkFaces) {
+        if (face.landmarks.length >= 468) {
+          ctx.strokeStyle = 'rgba(255, 235, 59, 0.75)';
+          ctx.lineWidth = 1;
+          drawConnections(ctx, face.landmarks, FACEMESH_CONTOUR_CONNECTIONS, vid, cvs);
+        }
+        if (face.landmarks.length >= 478) {
+          ctx.strokeStyle = 'rgba(255, 87, 34, 0.95)';
+          ctx.lineWidth = 1.2;
+          drawConnections(ctx, face.landmarks, FACEMESH_IRIS_CONNECTIONS, vid, cvs);
+        }
+
+        ctx.fillStyle = '#ffeb3b';
+        for (const point of face.landmarks) {
+          if (!Array.isArray(point) || point.length < 2) continue;
+          const px = Number(point[0]);
+          const py = Number(point[1]);
+          if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+          const { x, y } = mapPoint(px, py, vid, cvs);
+          ctx.beginPath();
+          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       rafId = requestAnimationFrame(render);
@@ -362,7 +588,7 @@ effectRuns:${debugSnapshot.effectRuns}
 pkts:${debugSnapshot.packetsTotal} mine:${debugSnapshot.packetsForMe}
 pktAt:${debugSnapshot.lastPacketAt ? formatTs(debugSnapshot.lastPacketAt) : '-'}
 mineAt:${debugSnapshot.lastPacketForMeAt ? formatTs(debugSnapshot.lastPacketForMeAt) : '-'}
-drawAt:${debugSnapshot.lastDrawAt ? formatTs(debugSnapshot.lastDrawAt) : '-'} boxes:${debugSnapshot.lastBoxCount}
+drawAt:${debugSnapshot.lastDrawAt ? formatTs(debugSnapshot.lastDrawAt) : '-'} yolo:${debugSnapshot.lastYoloCount} lm:${debugSnapshot.lastLandmarkCount} id:${debugSnapshot.lastIdentityCount}
 ${debugSnapshot.videoState}`}
         </div>
       )}
