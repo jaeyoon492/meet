@@ -602,7 +602,7 @@ function EnrollPageContent() {
   const canStartEnroll = connectionState === 'connected' && !isRunning;
 
   return (
-    <main className="min-h-dvh w-full bg-black text-white px-5 py-6 md:px-10 md:py-8">
+    <main className="h-[100svh] min-h-[100svh] w-full overflow-y-auto bg-black px-5 pt-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] text-white md:min-h-dvh md:px-10 md:pt-8 md:pb-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header className="flex flex-col gap-2">
           <p className="text-sm text-zinc-400">통화 전 얼굴 등록</p>
@@ -709,7 +709,7 @@ export default function EnrollPage() {
   return (
     <React.Suspense
       fallback={
-        <main className="min-h-dvh w-full bg-black text-white px-5 py-6 md:px-10 md:py-8">
+        <main className="h-[100svh] min-h-[100svh] w-full overflow-y-auto bg-black px-5 pt-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] text-white md:min-h-dvh md:px-10 md:pt-8 md:pb-8">
           <div className="mx-auto w-full max-w-5xl">
             <p className="text-sm text-zinc-300">등록 페이지 준비 중...</p>
           </div>
