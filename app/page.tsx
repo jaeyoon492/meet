@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
-import { encodePassphrase, generateRoomId, randomString } from '@/lib/client-utils';
+import { encodePassphrase, randomString } from '@/lib/client-utils';
 import JusticeLogo from '@/components/ui/JusticeLogo';
 import JusticeTextLogo from '@/components/ui/JusticeTextLogo';
 import OfuFooterLogo from '@/components/ui/OfuFooterLogo';
@@ -14,9 +14,9 @@ function DemoMeeting(props: {}) {
   const [sharedPassphrase, setSharedPassphrase] = useState(randomString(64));
 
   const startMeeting = () => {
-    const path = `/rooms/${generateRoomId()}`;
-    const fullPath = e2ee ? `${path}#${encodePassphrase(sharedPassphrase)}` : path;
-    router.push(fullPath);
+    const path = '/enroll';
+    const e2eeParam = e2ee ? `?e2ee=${encodeURIComponent(encodePassphrase(sharedPassphrase))}` : '';
+    router.push(`${path}${e2eeParam}`);
   };
 
   return (

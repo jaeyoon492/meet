@@ -12,6 +12,7 @@ export default function Page({
     region?: string;
     hq?: string;
     codec?: string;
+    participantName?: string;
   };
 }) {
   const codec =
@@ -21,6 +22,12 @@ export default function Page({
   const hq = searchParams.hq === 'true' ? true : false;
 
   return (
-    <PageClientImpl roomName={params.roomName} region={searchParams.region} hq={hq} codec={codec} />
+    <PageClientImpl
+      roomName={params.roomName}
+      region={searchParams.region}
+      hq={hq}
+      codec={codec}
+      participantName={searchParams.participantName}
+    />
   );
 }

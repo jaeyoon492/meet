@@ -46,30 +46,48 @@ import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
 const CONN_DETAILS_ENDPOINT =
   process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
 
+function faceSessionStorageKey(roomName: string): string {
+  return `faceSessionId:${roomName}`;
+}
+
 export function PageClientImpl(props: {
   roomName: string;
   region?: string;
   hq: boolean;
   codec: VideoCodec;
+  participantName?: string;
 }) {
+  const router = useRouter();
   const [preJoinChoices, setPreJoinChoices] = React.useState<LocalUserChoices | undefined>(
     undefined,
   );
   const [connectionDetails, setConnectionDetails] = React.useState<ConnectionDetails | undefined>(
     undefined,
   );
+  const [faceSessionId, setFaceSessionId] = React.useState<string | null>(null);
   const [language, setLanguage] = useState('ko'); // 기본 언어: 요청에 따라 'ko'
   // 브라우저 기본 장치 ID 조회 (권한 전이면 'default'가 반환될 수 있음)
   const { activeDeviceId: defaultAudioId } = useMediaDeviceSelect({ kind: 'audioinput' });
   const { activeDeviceId: defaultVideoId } = useMediaDeviceSelect({ kind: 'videoinput' });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.sessionStorage.getItem(faceSessionStorageKey(props.roomName));
+    if (!saved) {
+      router.replace(`/enroll?room=${encodeURIComponent(props.roomName)}`);
+      return;
+    }
+    setFaceSessionId(saved);
+  }, [props.roomName, router]);
 
   // PreJoin 없이 자동 참가: 마운트 시 기본 사용자/언어로 토큰 발급 → 접속
   React.useEffect(() => {
     let cancelled = false;
     async function autoJoin() {
       try {
+        if (!faceSessionId) return;
         if (connectionDetails) return;
-        const username = `테스터${randomString(4)}`;
+        const username = props.participantName?.trim() || `테스터${randomString(4)}`;
         const choices: LocalUserChoices = {
           username,
           videoEnabled: true,
@@ -79,7 +97,11 @@ export function PageClientImpl(props: {
         };
         setPreJoinChoices(choices);
 
-        const metadata = JSON.stringify({ preferred_language: 'ko' });
+        const metadata = JSON.stringify({
+          preferred_language: 'ko',
+          face_session_id: faceSessionId,
+          face_phase: 'call',
+        });
         const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
         url.searchParams.append('roomName', props.roomName);
         url.searchParams.append('participantName', username);
@@ -97,7 +119,15 @@ export function PageClientImpl(props: {
     return () => {
       cancelled = true;
     };
-  }, [connectionDetails, props.roomName, props.region, defaultAudioId, defaultVideoId]);
+  }, [
+    connectionDetails,
+    props.participantName,
+    faceSessionId,
+    props.roomName,
+    props.region,
+    defaultAudioId,
+    defaultVideoId,
+  ]);
 
   return (
     <main
@@ -110,6 +140,7 @@ export function PageClientImpl(props: {
           userChoices={preJoinChoices}
           options={{ codec: props.codec, hq: props.hq }}
           language={language}
+          roomName={props.roomName}
         />
       ) : (
         <div className="flex flex-col items-center gap-6 p-8 bg-neutral-900 rounded-2xl shadow border border-white/20">
@@ -128,6 +159,7 @@ function VideoConferenceComponent(props: {
     codec: VideoCodec;
   };
   language: string;
+  roomName: string;
 }) {
   const e2eePassphrase =
     typeof window !== 'undefined' && decodePassphrase(location.hash.substring(1));
@@ -203,7 +235,12 @@ function VideoConferenceComponent(props: {
   }, []);
 
   const router = useRouter();
-  const handleOnLeave = React.useCallback(() => router.push('/'), [router]);
+  const handleOnLeave = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(faceSessionStorageKey(props.roomName));
+    }
+    router.push('/');
+  }, [props.roomName, router]);
   const handleError = React.useCallback((error: Error) => {
     console.error(error);
     alert(`Encountered an unexpected error, check the console logs for details: ${error.message}`);
