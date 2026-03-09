@@ -147,7 +147,7 @@ function faceSessionStorageKey(roomName: string): string {
   return `faceSessionId:${roomName}`;
 }
 
-export default function EnrollPage() {
+function EnrollPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const e2eeParam = searchParams.get('e2ee');
@@ -702,5 +702,21 @@ export default function EnrollPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function EnrollPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <main className="min-h-dvh w-full bg-black text-white px-5 py-6 md:px-10 md:py-8">
+          <div className="mx-auto w-full max-w-5xl">
+            <p className="text-sm text-zinc-300">등록 페이지 준비 중...</p>
+          </div>
+        </main>
+      }
+    >
+      <EnrollPageContent />
+    </React.Suspense>
   );
 }
