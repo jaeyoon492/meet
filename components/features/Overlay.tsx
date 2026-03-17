@@ -15,6 +15,11 @@ type ParticipantIdentityState = {
   isLive: boolean;
   updatedAt: number;
 };
+type UnknownFaceUiState = {
+  count: number;
+  visible: boolean;
+  message: string;
+};
 const FACEMESH_CONTOUR_CONNECTIONS: Array<[number, number]> = [
   [0, 267], [7, 163], [10, 338], [13, 312], [14, 317], [17, 314], [21, 54], [33, 7],
   [33, 246], [37, 0], [39, 37], [40, 39], [46, 53], [52, 65], [53, 52], [54, 103],
@@ -39,6 +44,7 @@ const FACEMESH_IRIS_CONNECTIONS: Array<[number, number]> = [
 const DET_TTL_MS = 1200;
 const LANDMARK_TTL_MS = 1200;
 const IDENTITY_TTL_MS = 2000;
+const UNKNOWN_FACE_TOAST_MS = 2500;
 const roomDetStateStore = new WeakMap<Room, Map<string, ParticipantDetState>>();
 const roomLandmarkStateStore = new WeakMap<Room, Map<string, ParticipantLandmarkState>>();
 const roomIdentityStateStore = new WeakMap<Room, Map<string, ParticipantIdentityState>>();
@@ -138,6 +144,13 @@ export function Overlay({
     lastIdentityCount: 0,
     videoState: 'video=none',
   });
+  const [unknownFaceUi, setUnknownFaceUi] = useState<UnknownFaceUiState>({
+    count: 0,
+    visible: false,
+    message: '',
+  });
+  const unknownFaceCountRef = useRef(0);
+  const warningHideTimerRef = useRef<number | null>(null);
   const isDebug = process.env.NODE_ENV !== 'production';
 
   if (instanceIdRef.current === 0) {
@@ -336,6 +349,34 @@ export function Overlay({
       identityStateRef.current.set(identity, { faces, isLive, updatedAt: Date.now() });
     };
 
+    const updateUnknownFaceUi = (count: number) => {
+      if (unknownFaceCountRef.current === count) {
+        return;
+      }
+      unknownFaceCountRef.current = count;
+      setUnknownFaceUi((prev) => {
+        if (count <= 0) {
+          if (warningHideTimerRef.current) {
+            window.clearTimeout(warningHideTimerRef.current);
+            warningHideTimerRef.current = null;
+          }
+          return { ...prev, count: 0 };
+        }
+        const message =
+          count === 1
+            ? '등록되지 않은 얼굴이 감지되었습니다.'
+            : `등록되지 않은 얼굴 ${count}명이 감지되었습니다.`;
+        if (warningHideTimerRef.current) {
+          window.clearTimeout(warningHideTimerRef.current);
+        }
+        warningHideTimerRef.current = window.setTimeout(() => {
+          warningHideTimerRef.current = null;
+          setUnknownFaceUi((current) => ({ ...current, visible: false }));
+        }, UNKNOWN_FACE_TOAST_MS);
+        return { count, visible: true, message };
+      });
+    };
+
     const topicIdentity = (baseTopic: string, value?: string): string | null => {
       if (!value) return null;
       const prefix = `${baseTopic}.`;
@@ -466,10 +507,14 @@ export function Overlay({
       const landmarkFaces = landmarkState ? landmarkState.faces : [];
       const identityState = identityStateRef.current.get(participantIdentity);
       const identityFaces = identityState ? identityState.faces : [];
+      const unknownLiveFaces = identityFaces.filter(
+        (f) => (f.name || 'Unknown') === 'Unknown' && f.live !== false,
+      );
       lastDrawAtRef.current = now;
       lastYoloCountRef.current = dets.length;
       lastLandmarkCountRef.current = landmarkFaces.length;
       lastIdentityCountRef.current = identityFaces.length;
+      updateUnknownFaceUi(unknownLiveFaces.length);
 
       ctx.clearRect(0, 0, cvs.clientWidth, cvs.clientHeight);
       ctx.lineWidth = 2;
@@ -543,6 +588,10 @@ export function Overlay({
       room.off(RoomEvent.DataReceived, onData);
       cancelAnimationFrame(rafId);
       ro.disconnect();
+      if (warningHideTimerRef.current) {
+        window.clearTimeout(warningHideTimerRef.current);
+        warningHideTimerRef.current = null;
+      }
     };
   }, [room, participantIdentity]);
 
@@ -561,6 +610,64 @@ export function Overlay({
           pointerEvents: 'none', // 클릭 방해 금지
         }}
       />
+      {unknownFaceUi.count > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 8,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(8, 10, 16, 0.78)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '2px solid rgba(255, 107, 107, 0.65)',
+          }}
+        >
+          <div
+            style={{
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: 'rgba(0, 0, 0, 0.66)',
+              color: '#ffe3e3',
+              fontWeight: 700,
+              fontSize: 14,
+              textAlign: 'center',
+              maxWidth: '82%',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+            }}
+          >
+            등록되지 않은 얼굴이 감지되어 화면을 가렸습니다.
+          </div>
+        </div>
+      )}
+      {unknownFaceUi.visible && unknownFaceUi.message && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9,
+            pointerEvents: 'none',
+            padding: '8px 12px',
+            borderRadius: 999,
+            background: 'rgba(190, 38, 38, 0.92)',
+            color: '#fff5f5',
+            fontSize: 12,
+            fontWeight: 700,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            whiteSpace: 'nowrap',
+            maxWidth: '88%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {unknownFaceUi.message}
+        </div>
+      )}
       {isDebug && (
         <div
           style={{
